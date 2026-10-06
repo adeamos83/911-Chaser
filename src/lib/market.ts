@@ -11,12 +11,24 @@ export const LISTINGS = real as Listing[];
  * so it updates by itself whenever listings.json is refreshed.
  * Server only: importing this file in the browser would ship every listing to the visitor.
  */
-export const DATA_AS_OF = formatMonth(LISTINGS.reduce((newest, l) => (l.date > newest ? l.date : newest), ""));
+export const DATA_AS_OF = formatMonth(newestListingDate(LISTINGS));
 
+/** The latest `date` among the listings, or "" if there are none. ISO dates sort as plain strings. */
+function newestListingDate(listings: Listing[]): string {
+  let newest = "";
+  for (const listing of listings) {
+    if (listing.date > newest) newest = listing.date;
+  }
+  return newest;
+}
+
+/** "2026-10-03" -> "Oct 2026" */
 function formatMonth(isoDate: string): string {
   if (!isoDate) return "date unknown";
+  const dayOnly = isoDate.slice(0, 10);
   // UTC on both sides so the server and the browser always print the same month.
-  return new Date(`${isoDate.slice(0, 10)}T00:00:00Z`).toLocaleString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
+  const date = new Date(`${dayOnly}T00:00:00Z`);
+  return date.toLocaleString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
 }
 
 /** Modeled dataset with planted option effects (see scripts/generate-seed.ts). */
@@ -35,6 +47,7 @@ export function getPremiumTable(): PremiumTable {
 
   const measured = premiumTable(LISTINGS);
   const options = premiumTable(MODELED).options;
-  cachedTable = { ...measured, options, avgOptionContent: averageOptionContent(LISTINGS, options) };
+  const avgOptionContent = averageOptionContent(LISTINGS, options);
+  cachedTable = { ...measured, options, avgOptionContent };
   return cachedTable;
 }

@@ -9,6 +9,10 @@ import { premiumTable, type PremiumTable } from "./premiums";
 import { REF_MILEAGE, confidenceFor, type Confidence } from "./rules";
 import { median, quantile } from "./stats";
 
+/** The low and high ends of the estimate: the middle half of comparable prices sits between them. */
+const LOW_QUANTILE = 0.25;
+const HIGH_QUANTILE = 0.75;
+
 // ---------- 6. estimate ----------
 
 export interface Estimate {
@@ -61,32 +65,33 @@ function specPremium(spec: PricedSpec, table: PremiumTable): number {
  */
 export function estimateBuild(
   spec: BuildSpec,
-  ctx: EstimateContext,
-  at?: { mileage?: number; modelYear?: number },
+  context: EstimateContext,
+  statedAt?: { mileage?: number; modelYear?: number },
 ): Estimate | null {
-  const rows = cohort(ctx.listings, spec);
+  const rows = cohort(context.listings, spec);
   if (rows.length === 0) return null;
 
-  const table = ctx.table ?? premiumTable(ctx.listings);
+  const table = context.table ?? premiumTable(context.listings);
   const fit = fitCohort(rows);
-  const barePrices = mileageAdjust(rows, fit).map((r) => r.adjustedPrice - specPremium(r, table));
+  const adjusted = mileageAdjust(rows, fit);
+  const barePrices = adjusted.map((listing) => listing.adjustedPrice - specPremium(listing, table));
 
   // A Paint to Sample color always comes with the PTS option.
   const colorTier = colorDef(spec.color)?.tier ?? spec.colorTier ?? "Standard";
   const needsPtsOption = colorTier === "PTS" && !spec.options.includes("PTS");
   const options = needsPtsOption ? [...spec.options, "PTS"] : spec.options;
 
-  const medianMileage = Math.round(median(rows.map((r) => r.mileage)));
-  const mileage = at?.mileage ?? medianMileage;
+  const medianMileage = Math.round(median(rows.map((listing) => listing.mileage)));
+  const mileage = statedAt?.mileage ?? medianMileage;
 
   let addBack = specPremium({ ...spec, options, colorTier, optionsKnown: true }, table);
   addBack += fit.perMile * (mileage - REF_MILEAGE);
-  if (at?.modelYear !== undefined) addBack += fit.perYear * (at.modelYear - fit.refYear);
+  if (statedAt?.modelYear !== undefined) addBack += fit.perYear * (statedAt.modelYear - fit.refYear);
 
   return {
-    low: quantile(barePrices, 0.25) + addBack,
+    low: quantile(barePrices, LOW_QUANTILE) + addBack,
     mid: median(barePrices) + addBack,
-    high: quantile(barePrices, 0.75) + addBack,
+    high: quantile(barePrices, HIGH_QUANTILE) + addBack,
     confidence: confidenceFor(rows.length),
     sample: rows.length,
     mileage,
@@ -113,8 +118,9 @@ export function specOf(listing: Listing): BuildSpec {
  * How far under (+) or over (-) the expected price a listing is, as a fraction.
  * 0.1 means "priced 10% under what this exact car should cost".
  */
-export function dealScore(listing: Listing, ctx: EstimateContext): number {
-  const expected = estimateBuild(specOf(listing), ctx, { mileage: listing.mileage, modelYear: listing.modelYear });
+export function dealScore(listing: Listing, context: EstimateContext): number {
+  const sameMilesAndYear = { mileage: listing.mileage, modelYear: listing.modelYear };
+  const expected = estimateBuild(specOf(listing), context, sameMilesAndYear);
   if (!expected || expected.mid <= 0) return 0;
   return (expected.mid - listing.price) / expected.mid;
 }

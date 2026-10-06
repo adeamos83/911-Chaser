@@ -21,13 +21,14 @@ export function priceByYear(
 ): YearPoint[] {
   const pricesByYear = new Map<number, number[]>();
   for (const listing of cohort(listings, key)) {
-    pricesByYear.set(listing.modelYear, [...(pricesByYear.get(listing.modelYear) ?? []), listing.price]);
+    const pricesSoFar = pricesByYear.get(listing.modelYear) ?? [];
+    pricesByYear.set(listing.modelYear, [...pricesSoFar, listing.price]);
   }
 
   return [...pricesByYear.entries()]
     .filter(([, prices]) => prices.length >= minSample)
     .map(([year, prices]) => ({ year, medianPrice: median(prices), sample: prices.length }))
-    .sort((a, b) => a.year - b.year);
+    .sort((first, second) => first.year - second.year);
 }
 
 // ---------- bang for buck ----------
@@ -42,6 +43,7 @@ export interface BangForBuck {
   sample: number;
 }
 
+/** Every trim ranked by horsepower per dollar, best first. Trims with too few listings are left out. */
 export function bangForBuck(listings: Listing[]): BangForBuck[] {
   const rows = TRIMS.map((trim) => {
     const prices = cohort(listings, trim).map((listing) => listing.price);
@@ -56,5 +58,6 @@ export function bangForBuck(listings: Listing[]): BangForBuck[] {
     };
   });
 
-  return rows.filter((row) => row.sample >= MIN_LISTINGS_TO_SHOW).sort((a, b) => b.hpPerK - a.hpPerK);
+  const wellSampled = rows.filter((row) => row.sample >= MIN_LISTINGS_TO_SHOW);
+  return wellSampled.sort((first, second) => second.hpPerK - first.hpPerK);
 }

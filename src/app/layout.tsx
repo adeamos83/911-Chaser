@@ -13,6 +13,7 @@ export const metadata: Metadata = {
   description: "Spec a 991 or 992 Porsche 911 and see what it costs, which options hold value, and where the deals are.",
 };
 
+/** Shared page shell: fonts, the top nav, and a sign-in or sign-out button. */
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
   const {

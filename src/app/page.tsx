@@ -3,12 +3,27 @@ import { Car911 } from "@/components/Car911";
 import { bangForBuck } from "@/lib/engine";
 import { LISTINGS, getPremiumTable } from "@/lib/market";
 import { specToQuery, normalizeSpec, usdK } from "@/lib/spec";
+import type { Generation, Trim } from "@/data/types";
 
+// How many rows the best-value leaderboard shows.
+const LEADERBOARD_SIZE = 8;
+// Options cheaper than this aren't "big-ticket", so they can't be the worst-payback pick.
+const BIG_TICKET_MIN_COST = 5000;
+
+const asPercent = (fraction: number) => Math.round(fraction * 100);
+
+/** Landing page: hero, best-value leaderboard, and the best and worst options for resale. */
 export default function Home() {
-  const leaders = bangForBuck(LISTINGS).slice(0, 8);
-  const opts = Object.values(getPremiumTable().options).sort((a, b) => b.payback - a.payback);
-  const best = opts[0];
-  const worst = opts.filter((o) => o.msrpCost >= 5000).sort((a, b) => a.payback - b.payback)[0];
+  const leaders = bangForBuck(LISTINGS).slice(0, LEADERBOARD_SIZE);
+
+  // Options sorted from best payback to worst.
+  const allOptions = Object.values(getPremiumTable().options);
+  const optionsByPayback = allOptions.sort((first, second) => second.payback - first.payback);
+  const best = optionsByPayback[0];
+
+  const bigTicketOptions = optionsByPayback.filter((option) => option.msrpCost >= BIG_TICKET_MIN_COST);
+  const bigTicketWorstFirst = bigTicketOptions.sort((first, second) => first.payback - second.payback);
+  const worst = bigTicketWorstFirst[0];
 
   return (
     <main>
@@ -40,18 +55,18 @@ export default function Home() {
           <h2 className="mt-2 font-display text-4xl">Best value 911 right now</h2>
           <p className="mt-2 text-sm text-muted">Horsepower per $1,000 of median asking price, from {LISTINGS.length.toLocaleString()} real listings.</p>
           <ol className="mt-6 divide-y divide-line border-y border-line">
-            {leaders.map((r, i) => (
-              <li key={`${r.generation}-${r.trim}`}>
+            {leaders.map((row, i) => (
+              <li key={`${row.generation}-${row.trim}`}>
                 <Link
-                  href={`/build?${specToQuery(normalizeSpec({ generation: r.generation, trim: r.trim }))}`}
+                  href={buildLink(row.generation, row.trim)}
                   className="grid grid-cols-[2rem_1fr_auto_auto] items-baseline gap-4 py-3 hover:bg-panel"
                 >
                   <span className="tabular text-muted">{String(i + 1).padStart(2, "0")}</span>
                   <span>
-                    <span className="text-muted">{r.generation}</span> {r.trim}
+                    <span className="text-muted">{row.generation}</span> {row.trim}
                   </span>
-                  <span className="tabular text-muted">{r.hp} hp · {usdK(r.medianPrice)}</span>
-                  <span className="tabular w-20 text-right font-medium text-accent">{r.hpPerK.toFixed(2)}</span>
+                  <span className="tabular text-muted">{row.hp} hp · {usdK(row.medianPrice)}</span>
+                  <span className="tabular w-20 text-right font-medium text-accent">{row.hpPerK.toFixed(2)}</span>
                 </Link>
               </li>
             ))}
@@ -62,18 +77,24 @@ export default function Home() {
             <p className="eyebrow">Best payback · modeled</p>
             <p className="mt-2 font-display text-3xl">{best.name}</p>
             <p className="mt-1 text-muted">
-              You get back <span className="text-holder">{Math.round(best.payback * 100)}%</span> of what it cost.
+              You get back <span className="text-holder">{asPercent(best.payback)}%</span> of what it cost.
             </p>
           </div>
           <div className="rounded-2xl border border-line bg-panel p-6">
             <p className="eyebrow">Worst big-ticket option · modeled</p>
             <p className="mt-2 font-display text-3xl">{worst.name}</p>
             <p className="mt-1 text-muted">
-              ${worst.msrpCost.toLocaleString()} new, <span className="text-pit">{Math.round(worst.payback * 100)}%</span> back at resale.
+              ${worst.msrpCost.toLocaleString()} new, <span className="text-pit">{asPercent(worst.payback)}%</span> back at resale.
             </p>
           </div>
         </div>
       </section>
     </main>
   );
+}
+
+/** Link to the configurator with this generation and trim preselected. */
+function buildLink(generation: Generation, trim: Trim) {
+  const spec = normalizeSpec({ generation, trim });
+  return `/build?${specToQuery(spec)}`;
 }

@@ -22,6 +22,7 @@ const DEBOUNCE_MS = 120;
 export function useLiveAnalysis(spec: BuildSpec, mileage: number | undefined, initialAnalysis: Analysis) {
   const [analysis, setAnalysis] = useState(initialAnalysis);
   const [pending, startTransition] = useTransition();
+  // Refs (not state) because changing them must not trigger a re-render.
   const isFirstRender = useRef(true);
   const latestRequestId = useRef(0);
 
@@ -33,16 +34,17 @@ export function useLiveAnalysis(spec: BuildSpec, mileage: number | undefined, in
 
     window.history.replaceState(null, "", `/build?${specToQuery(spec)}`);
 
-    const requestId = ++latestRequestId.current;
-    const timer = setTimeout(
-      () =>
-        startTransition(async () => {
-          const next = await analyzeSpec(spec, mileage);
-          // Rapid clicks can resolve out of order; only the newest request may update the screen.
-          if (requestId === latestRequestId.current) setAnalysis(next);
-        }),
-      DEBOUNCE_MS,
-    );
+    latestRequestId.current += 1;
+    const requestId = latestRequestId.current;
+
+    const fetchAnalysis = () => {
+      startTransition(async () => {
+        const nextAnalysis = await analyzeSpec(spec, mileage);
+        // Rapid clicks can resolve out of order; only the newest request may update the screen.
+        if (requestId === latestRequestId.current) setAnalysis(nextAnalysis);
+      });
+    };
+    const timer = setTimeout(fetchAnalysis, DEBOUNCE_MS);
     // If the spec changes again before the timer fires, cancel this request.
     return () => clearTimeout(timer);
   }, [spec, mileage]);

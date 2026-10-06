@@ -41,9 +41,9 @@ export function BuildPicker({ spec, onChange }: Props) {
         </ChoiceRow>
 
         <ChoiceRow label="Model">
-          {trimsFor(spec.generation).map((t) => (
-            <ChoiceButton key={t.trim} active={spec.trim === t.trim} onClick={() => onChange({ trim: t.trim })}>
-              {t.trim}
+          {trimsFor(spec.generation).map((trimOption) => (
+            <ChoiceButton key={trimOption.trim} active={spec.trim === trimOption.trim} onClick={() => onChange({ trim: trimOption.trim })}>
+              {trimOption.trim}
             </ChoiceButton>
           ))}
         </ChoiceRow>
@@ -86,20 +86,19 @@ export function BuildPicker({ spec, onChange }: Props) {
           <p className="eyebrow mb-2">Paint</p>
           <div className="space-y-2">
             {COLOR_TIERS.map((tier) => {
-              const colors = colorsFor(spec.generation).filter((c) => c.tier === tier);
+              const colors = colorsFor(spec.generation).filter((color) => color.tier === tier);
               if (!colors.length) return null;
               return (
                 <div key={tier} className="flex items-center gap-3">
                   <span className="w-20 text-xs text-muted">{tier}</span>
                   <div className="flex flex-wrap gap-2">
-                    {colors.map((c) => (
-                      <button
-                        key={c.name}
-                        title={c.name}
-                        aria-label={c.name}
-                        onClick={() => onChange({ color: c.name })}
-                        className={`h-7 w-7 rounded-full border transition ${spec.color === c.name ? "scale-110 ring-2 ring-ink ring-offset-2 ring-offset-bg" : "border-white/20 hover:scale-110"}`}
-                        style={{ background: c.hex }}
+                    {colors.map((color) => (
+                      <PaintSwatch
+                        key={color.name}
+                        name={color.name}
+                        hex={color.hex}
+                        selected={spec.color === color.name}
+                        onClick={() => onChange({ color: color.name })}
                       />
                     ))}
                   </div>
@@ -113,12 +112,27 @@ export function BuildPicker({ spec, onChange }: Props) {
   );
 }
 
+/** A labeled row of choice buttons. */
 function ChoiceRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
       <p className="eyebrow mb-2">{label}</p>
       <div className="flex flex-wrap gap-1.5">{children}</div>
     </div>
+  );
+}
+
+/** A round paint chip. The selected one is enlarged and ringed. */
+function PaintSwatch({ name, hex, selected, onClick }: { name: string; hex: string; selected: boolean; onClick: () => void }) {
+  const stateClasses = selected ? "scale-110 ring-2 ring-ink ring-offset-2 ring-offset-bg" : "border-white/20 hover:scale-110";
+  return (
+    <button
+      title={name}
+      aria-label={name}
+      onClick={onClick}
+      className={`h-7 w-7 rounded-full border transition ${stateClasses}`}
+      style={{ background: hex }}
+    />
   );
 }
 

@@ -3,11 +3,13 @@ import { useEffect, useState, useTransition } from "react";
 import type { BuildSpec } from "@/data/types";
 import { defaultBuildName, specToQuery } from "@/lib/spec";
 import { saveBuild } from "../actions";
+import { MAX_BUILD_NAME_LENGTH } from "@/lib/limits";
 
 /** Signed out: a "Sign in to save" link. Signed in: a name field and a "Save to Garage" button. */
 export function SaveButton({ spec, signedIn }: { spec: BuildSpec; signedIn: boolean }) {
   const [name, setName] = useState(defaultBuildName(spec));
   const [status, setStatus] = useState<{ saved?: boolean; error?: string }>({});
+  // pending is true while the save request is running.
   const [pending, startTransition] = useTransition();
 
   // When the spec changes, suggest a fresh name and clear the old "Saved" message.
@@ -25,8 +27,8 @@ export function SaveButton({ spec, signedIn }: { spec: BuildSpec; signedIn: bool
     );
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
     startTransition(async () => {
       const result = await saveBuild(name, spec);
       setStatus(result.error ? { error: result.error } : { saved: true });
@@ -35,7 +37,7 @@ export function SaveButton({ spec, signedIn }: { spec: BuildSpec; signedIn: bool
 
   return (
     <form className="flex flex-wrap items-center gap-2" onSubmit={handleSubmit}>
-      <input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} aria-label="Build name" className="w-56 rounded-full border border-line bg-bg px-4 py-2 text-sm outline-none focus:border-accent" />
+      <input value={name} onChange={(event) => setName(event.target.value)} maxLength={MAX_BUILD_NAME_LENGTH} aria-label="Build name" className="w-56 rounded-full border border-line bg-bg px-4 py-2 text-sm outline-none focus:border-accent" />
       <button disabled={pending} className="rounded-full bg-ink px-5 py-2.5 text-sm font-medium text-bg hover:bg-white disabled:opacity-50">
         {pending ? "Saving…" : "Save to Garage"}
       </button>

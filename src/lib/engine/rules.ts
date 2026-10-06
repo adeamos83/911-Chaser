@@ -27,6 +27,7 @@ export const MIN_LISTINGS_TO_FIT = 3;
 export type Confidence = "high" | "medium" | "low";
 export type ValueTier = "Value Holder" | "Neutral" | "Money Pit";
 
+/** How much to trust a number, based on how many cars it was measured from. */
 export function confidenceFor(sampleSize: number): Confidence {
   if (sampleSize < MIN_SAMPLE) return "low";
   if (sampleSize < HIGH_CONFIDENCE_SAMPLE) return "medium";

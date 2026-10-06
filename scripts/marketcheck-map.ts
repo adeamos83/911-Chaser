@@ -15,15 +15,16 @@ const EXCLUDE = /gt3|gt2|speedster|dakar|sport classic|spirit|anniversary|50 yea
  * before "Turbo", and "Carrera 4S" before "Carrera S", or the shorter name would match first.
  */
 export function trimFor(version: string): Trim | null {
-  const v = version.split("|")[0];
-  if (EXCLUDE.test(v)) return null;
-  if (/turbo s/i.test(v)) return "Turbo S";
-  if (/turbo/i.test(v)) return "Turbo";
-  if (/gts/i.test(v)) return "GTS";
-  if (/4s/i.test(v)) return "Carrera 4S";
-  if (/carrera s\b/i.test(v)) return "Carrera S";
-  if (/carrera t\b/i.test(v)) return "Carrera T";
-  if (/carrera|targa 4|black edition/i.test(v)) return "Carrera";
+  // MarketCheck sometimes packs extra info after a "|"; only the first part is the version name.
+  const versionName = version.split("|")[0];
+  if (EXCLUDE.test(versionName)) return null;
+  if (/turbo s/i.test(versionName)) return "Turbo S";
+  if (/turbo/i.test(versionName)) return "Turbo";
+  if (/gts/i.test(versionName)) return "GTS";
+  if (/4s/i.test(versionName)) return "Carrera 4S";
+  if (/carrera s\b/i.test(versionName)) return "Carrera S";
+  if (/carrera t\b/i.test(versionName)) return "Carrera T";
+  if (/carrera|targa 4|black edition/i.test(versionName)) return "Carrera";
   return null;
 }
 
@@ -39,26 +40,38 @@ function colorTierFor(lowerName: string): ColorTier {
   return "Standard";
 }
 
+/** True when the dealer's lowercased paint name refers to this catalog color. */
+function matchesCatalogColor(lowerName: string, catalogName: string): boolean {
+  const key = catalogName.toLowerCase().replace(" (pts)", "");
+  if (lowerName.includes(key)) return true;
+  // "Black" and "White" only count as an exact match, so "Black Edition" etc. don't slip through.
+  const isPlainBlack = key === "black" && lowerName === "black";
+  const isPlainWhite = key === "white" && lowerName === "white";
+  return isPlainBlack || isPlainWhite;
+}
+
+/** "GUARDS red" becomes "Guards Red". */
+function toTitleCase(text: string): string {
+  return text.toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
 /**
  * Matches a dealer's paint name to one of our catalog colors when possible.
  * If there's no match (or the tiers disagree), keeps the dealer's name in Title Case.
  */
-export function colorFor(raw: string | undefined): { color: string; colorTier: ColorTier } {
-  const name = (raw ?? "").replace(/\s+/g, " ").trim();
-  const lower = name.toLowerCase().replace(/-/g, " ");
-  const tier = colorTierFor(lower);
+export function colorFor(rawName: string | undefined): { color: string; colorTier: ColorTier } {
+  const name = (rawName ?? "").replace(/\s+/g, " ").trim();
+  const lowerName = name.toLowerCase().replace(/-/g, " ");
+  const tier = colorTierFor(lowerName);
 
-  const catalogColor = COLORS.find((c) => {
-    const key = c.name.toLowerCase().replace(" (pts)", "");
-    return lower.includes(key) || (key === "black" && lower === "black") || (key === "white" && lower === "white");
-  });
+  const catalogColor = COLORS.find((catalogEntry) => matchesCatalogColor(lowerName, catalogEntry.name));
   // A dealer's "Standard" just means we found no tier keywords, so trust the catalog's tier then.
   if (catalogColor && (catalogColor.tier === tier || tier === "Standard")) {
     return { color: catalogColor.name, colorTier: catalogColor.tier };
   }
 
-  const titleCase = name ? name.toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase()) : "Unknown";
-  return { color: titleCase, colorTier: tier };
+  const displayName = name ? toTitleCase(name) : "Unknown";
+  return { color: displayName, colorTier: tier };
 }
 
 function bodyFor(bodyType: string | undefined, version: string): Body {
@@ -75,34 +88,46 @@ const MAX_PRICE_TO_MSRP = 2.5;
 export type MappedListing = Omit<Listing, "options"> & { vdpUrl?: string; dom?: number };
 
 /** Returns null for any listing we can't use (missing data, excluded model, implausible price). */
-export function mapListing(l: any): MappedListing | null {
-  const b = l.build ?? {};
-  if (!b.year || !b.version || !l.price || l.miles == null) return null;
-  const trim = trimFor(b.version);
+export function mapListing(rawListing: any): MappedListing | null {
+  const build = rawListing.build ?? {};
+  const hasRequiredFields = build.year && build.version && rawListing.price && rawListing.miles != null;
+  if (!hasRequiredFields) return null;
+
+  const trim = trimFor(build.version);
   if (!trim) return null;
+
   // Generation comes from each model's own US model-year run: a 2025 Carrera S is still a 992.1,
   // and a 2013 Turbo S is a 997, so it matches nothing and is dropped.
-  const spec = TRIMS.find((t) => t.trim === trim && b.year >= t.years[0] && b.year <= t.years[1]);
+  const spec = TRIMS.find((trimSpec) => {
+    const [firstYear, lastYear] = trimSpec.years;
+    return trimSpec.trim === trim && build.year >= firstYear && build.year <= lastYear;
+  });
   if (!spec) return null;
-  const generation = spec.generation;
-  if (l.price < MIN_PLAUSIBLE_PRICE || l.price > spec.baseMsrp * MAX_PRICE_TO_MSRP) return null;
-  const body = bodyFor(b.body_type, b.version);
+
+  const maxPlausiblePrice = spec.baseMsrp * MAX_PRICE_TO_MSRP;
+  if (rawListing.price < MIN_PLAUSIBLE_PRICE || rawListing.price > maxPlausiblePrice) return null;
+
+  const transmission = build.transmission === "Manual" ? "Manual" : "PDK";
+  const firstSeenDate = (rawListing.first_seen_at_date ?? "").slice(0, 10);
+  const { color, colorTier } = colorFor(rawListing.exterior_color ?? rawListing.base_ext_color);
+
   return {
-    id: l.vin ?? l.id,
-    generation,
-    modelYear: b.year,
+    id: rawListing.vin ?? rawListing.id,
+    generation: spec.generation,
+    modelYear: build.year,
     trim,
-    body,
-    transmission: b.transmission === "Manual" ? "Manual" : "PDK",
-    ...colorFor(l.exterior_color ?? l.base_ext_color),
-    mileage: l.miles,
+    body: bodyFor(build.body_type, build.version),
+    transmission,
+    color,
+    colorTier,
+    mileage: rawListing.miles,
     // MarketCheck's msrp on used listings is usually the asking price, so use the base sticker instead.
     originalMsrp: spec.baseMsrp,
-    price: l.price,
+    price: rawListing.price,
     status: "for_sale",
-    date: (l.first_seen_at_date ?? "").slice(0, 10),
-    vdpUrl: l.vdp_url,
-    dom: l.dom,
+    date: firstSeenDate,
+    vdpUrl: rawListing.vdp_url,
+    dom: rawListing.dom,
   };
 }
 
@@ -133,20 +158,34 @@ const OPTIONAL_FEATURES: Record<string, string> = {
   "Sun/Moonroof": "SUNROOF",
 };
 
+/** Joins every free-text field we search for options into one lowercase string. */
+function searchableText(extra: any): string {
+  const features: any[] = extra.high_value_features ?? [];
+  const optionPackages: any[] = extra.options_packages ?? [];
+
+  const featureDescriptions = features.map((feature) => feature.description ?? "");
+  // Option packages come back either as plain strings or as objects with a description.
+  const packageDescriptions = optionPackages.map((optionPackage) =>
+    typeof optionPackage === "string" ? optionPackage : (optionPackage.description ?? ""),
+  );
+  const sellerComments = extra.seller_comments ?? "";
+
+  const allText = [...featureDescriptions, ...packageDescriptions, sellerComments].join(" \n ");
+  return allText.toLowerCase();
+}
+
 /** Finds option codes from MarketCheck's structured features plus a text search of the dealer's description. */
 export function mapOptions(extra: any, body: Body): string[] {
-  const fromFeatures = (extra.high_value_features ?? [])
-    .filter((f: any) => f.type === "Optional" && OPTIONAL_FEATURES[f.description])
-    .map((f: any) => OPTIONAL_FEATURES[f.description]);
-  const text = [
-    ...(extra.high_value_features ?? []).map((f: any) => f.description ?? ""),
-    ...(extra.options_packages ?? []).map((o: any) => (typeof o === "string" ? o : (o.description ?? ""))),
-    extra.seller_comments ?? "",
-  ]
-    .join(" \n ")
-    .toLowerCase();
-  const fromText = OPTION_PATTERNS.filter(([, pattern]) => pattern.test(text)).map(([code]) => code);
+  const features: any[] = extra.high_value_features ?? [];
+  const optionalFeatures = features.filter(
+    (feature) => feature.type === "Optional" && OPTIONAL_FEATURES[feature.description],
+  );
+  const codesFromFeatures = optionalFeatures.map((feature) => OPTIONAL_FEATURES[feature.description]);
 
-  const codes = new Set([...fromFeatures, ...fromText]);
-  return [...codes].filter((code) => optionAvailableOn(code, body));
+  const text = searchableText(extra);
+  const matchingPatterns = OPTION_PATTERNS.filter(([, pattern]) => pattern.test(text));
+  const codesFromText = matchingPatterns.map(([code]) => code);
+
+  const uniqueCodes = new Set([...codesFromFeatures, ...codesFromText]);
+  return [...uniqueCodes].filter((code) => optionAvailableOn(code, body));
 }

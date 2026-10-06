@@ -11,6 +11,10 @@ import { PriceByYearChart } from "./PriceByYearChart";
 import { PriceCard } from "./PriceCard";
 import { useLiveAnalysis, type Analysis } from "./useLiveAnalysis";
 
+/** How much of the paint color goes into the accent; the rest is off-white. */
+const ACCENT_PAINT_PERCENT = 65;
+const ACCENT_BLEND_COLOR = "#f2efea";
+
 interface Props {
   initialSpec: BuildSpec;
   initialAnalysis: Analysis;
@@ -41,13 +45,16 @@ export function Configurator({ initialSpec, initialAnalysis, optionValues, signe
   };
 
   const toggleOption = (code: string) => {
-    const options = spec.options.includes(code) ? spec.options.filter((o) => o !== code) : [...spec.options, code];
+    const isSelected = spec.options.includes(code);
+    const options = isSelected
+      ? spec.options.filter((optionCode) => optionCode !== code)
+      : [...spec.options, code];
     updateSpec({ options });
   };
 
   // The page's accent color is a lighter blend of the chosen paint.
   const paint = colorDef(spec.color)!;
-  const accentColor = `color-mix(in oklab, ${paint.hex} 65%, #f2efea)`;
+  const accentColor = `color-mix(in oklab, ${paint.hex} ${ACCENT_PAINT_PERCENT}%, ${ACCENT_BLEND_COLOR})`;
 
   return (
     <main className="mx-auto grid max-w-7xl gap-10 px-5 py-10 lg:grid-cols-[1.15fr_1fr]" style={{ ["--accent" as string]: accentColor }}>

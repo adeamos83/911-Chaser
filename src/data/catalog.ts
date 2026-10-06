@@ -2,6 +2,7 @@ import type { Body, ColorDef, Generation, OptionDef, TrimSpec, Trim } from "./ty
 
 export const GENERATIONS: Generation[] = ["991.1", "991.2", "992.1", "992.2"];
 export const BODIES: Body[] = ["Coupe", "Cabriolet", "Targa"];
+// Shorthand for options and colors offered on every generation.
 const ALL: Generation[] = GENERATIONS;
 
 // US model years. Base MSRPs are approximate launch-year figures.
@@ -76,11 +77,11 @@ export const COLORS: ColorDef[] = [
 ];
 
 export function trimsFor(generation: Generation): TrimSpec[] {
-  return TRIMS.filter((t) => t.generation === generation);
+  return TRIMS.filter((trimEntry) => trimEntry.generation === generation);
 }
 
 export function trimSpec(generation: Generation, trim: Trim): TrimSpec | undefined {
-  return TRIMS.find((t) => t.generation === generation && t.trim === trim);
+  return TRIMS.find((trimEntry) => trimEntry.generation === generation && trimEntry.trim === trim);
 }
 
 /** Targa is AWD only: Targa 4 (filed under Carrera), Targa 4S and Targa 4 GTS. Turbos ship as Coupe/Cab. */
@@ -90,15 +91,15 @@ export function bodiesFor(trim: Trim): Body[] {
 }
 
 export function colorsFor(generation: Generation): ColorDef[] {
-  return COLORS.filter((c) => c.generations.includes(generation));
+  return COLORS.filter((color) => color.generations.includes(generation));
 }
 
 export function colorDef(name: string): ColorDef | undefined {
-  return COLORS.find((c) => c.name === name);
+  return COLORS.find((color) => color.name === name);
 }
 
 export function optionDef(code: string): OptionDef | undefined {
-  return OPTIONS.find((o) => o.code === code);
+  return OPTIONS.find((option) => option.code === code);
 }
 
 /** Some options only exist on certain bodies (e.g. the sunroof is Coupe only). */

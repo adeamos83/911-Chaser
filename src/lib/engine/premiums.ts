@@ -36,8 +36,8 @@ export function premiumWhere(
   eligible: (listing: Listing) => boolean = () => true,
 ): Premium {
   const rows = pool.filter(eligible);
-  const withFeature = rows.filter(has).map((r) => r.residual);
-  const withoutFeature = rows.filter((r) => !has(r)).map((r) => r.residual);
+  const withFeature = rows.filter(has).map((listing) => listing.residual);
+  const withoutFeature = rows.filter((listing) => !has(listing)).map((listing) => listing.residual);
   const bothSidesHaveCars = withFeature.length > 0 && withoutFeature.length > 0;
   return {
     premiumUsd: bothSidesHaveCars ? median(withFeature) - median(withoutFeature) : 0,
@@ -56,6 +56,7 @@ function premiumForOption(pool: ListingWithResidual[], optionCode: string): Prem
   );
 }
 
+/** Resale premium for one option code, measured on a raw list of listings. */
 export function optionPremium(listings: Listing[], optionCode: string): Premium {
   return premiumForOption(residuals(listings), optionCode);
 }
@@ -110,11 +111,19 @@ export function premiumTable(pool: Listing[]): PremiumTable {
   for (const option of OPTIONS) {
     const premium = premiumForOption(withResiduals, option.code);
     const payback = paybackPct(premium.premiumUsd, option.msrpCost);
-    options[option.code] = { ...premium, code: option.code, name: option.name, msrpCost: option.msrpCost, payback, tier: tierFor(payback) };
+    options[option.code] = {
+      ...premium,
+      code: option.code,
+      name: option.name,
+      msrpCost: option.msrpCost,
+      payback,
+      tier: tierFor(payback),
+    };
   }
 
   // Only compare manual vs PDK on trims where a manual was actually offered.
-  const trimsWithManual = new Set(TRIMS.filter((t) => t.manualAvailable).map((t) => `${t.generation}|${t.trim}`));
+  const manualTrims = TRIMS.filter((trim) => trim.manualAvailable);
+  const trimsWithManual = new Set(manualTrims.map((trim) => `${trim.generation}|${trim.trim}`));
   const manual = premiumWhere(
     withResiduals,
     (listing) => listing.transmission === "Manual",

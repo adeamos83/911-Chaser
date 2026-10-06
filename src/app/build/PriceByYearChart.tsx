@@ -4,6 +4,13 @@ import { usd, usdK } from "@/lib/spec";
 import type { Analysis } from "./useLiveAnalysis";
 
 const AXIS_COLOR = "#6b675f";
+const TOOLTIP_STYLE = { background: "#131315", border: "1px solid #26262a", borderRadius: 8 };
+
+/** Padding (in years) on each side of the x-axis so the first and last dots aren't on the edge. */
+const YEAR_AXIS_PADDING = 0.5;
+/** The y-axis starts 10% below the cheapest year and ends 5% above the priciest, so the line doesn't touch the edges. */
+const Y_AXIS_BOTTOM_FACTOR = 0.9;
+const Y_AXIS_TOP_FACTOR = 1.05;
 
 interface Props {
   analysis: Analysis;
@@ -16,7 +23,9 @@ export function PriceByYearChart({ analysis, pending }: Props) {
   const shown = analysis.spec;
   const { years } = trimSpec(shown.generation, shown.trim)!;
   const [firstYear, lastYear] = years;
-  const yearTicks = Array.from({ length: lastYear - firstYear + 1 }, (_, i) => firstYear + i);
+  // One tick per model year, e.g. [2020, 2021, 2022].
+  const yearCount = lastYear - firstYear + 1;
+  const yearTicks = Array.from({ length: yearCount }, (_unused, index) => firstYear + index);
   const { perYear, perTenKMiles } = analysis.slopes;
 
   return (
@@ -62,8 +71,7 @@ export function PriceByYearChart({ analysis, pending }: Props) {
                 <XAxis
                   dataKey="year"
                   type="number"
-                  // Half a year of padding on each side so the first and last dots aren't on the edge.
-                  domain={[firstYear - 0.5, lastYear + 0.5]}
+                  domain={[firstYear - YEAR_AXIS_PADDING, lastYear + YEAR_AXIS_PADDING]}
                   ticks={yearTicks}
                   stroke={AXIS_COLOR}
                   tickLine={false}
@@ -74,14 +82,14 @@ export function PriceByYearChart({ analysis, pending }: Props) {
                   tickLine={false}
                   fontSize={12}
                   width={48}
-                  // Headroom above and below the line so it doesn't touch the chart edges.
-                  domain={[(min: number) => min * 0.9, (max: number) => max * 1.05]}
-                  tickFormatter={(v) => usdK(v)}
+                  domain={[(min: number) => min * Y_AXIS_BOTTOM_FACTOR, (max: number) => max * Y_AXIS_TOP_FACTOR]}
+                  tickFormatter={(price) => usdK(price)}
                 />
                 <Tooltip
-                  contentStyle={{ background: "#131315", border: "1px solid #26262a", borderRadius: 8 }}
-                  formatter={(v, _n, item) => [`${usd(Number(v))} median · ${item.payload.sample} listings`, "Asking"]}
-                  labelFormatter={(y) => `${y} model year`}
+                  contentStyle={TOOLTIP_STYLE}
+                  // Returns [value text, series label] for the hovered point.
+                  formatter={(price, _seriesName, point) => [`${usd(Number(price))} median · ${point.payload.sample} listings`, "Asking"]}
+                  labelFormatter={(year) => `${year} model year`}
                 />
                 <Line
                   type="monotone"

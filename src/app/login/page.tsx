@@ -1,5 +1,6 @@
 import { LoginForm } from "./LoginForm";
 
+/** Sign-in page. `next` is where to send the user after they sign in. */
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
   const { next } = await searchParams;
   return (

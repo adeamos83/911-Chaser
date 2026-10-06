@@ -5,18 +5,24 @@ import { dealScore, type PremiumTable } from "@/lib/engine";
 import { DATA_AS_OF, LISTINGS, getPremiumTable } from "@/lib/market";
 import { specFromParams, specToQuery, usd } from "@/lib/spec";
 
+// Every trim name across all generations, without duplicates, for the "Model" dropdown.
+const ALL_TRIM_NAMES = [...new Set(GENERATIONS.flatMap((generation) => trimsFor(generation).map((trimEntry) => trimEntry.trim)))];
+
+/** Lists every car for sale that matches the chosen generation and trim, ranked by how far under market it is. */
 export default async function DealsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const spec = specFromParams(await searchParams);
   const ctx = { listings: LISTINGS, table: getPremiumTable() };
 
   // Every car of this generation and trim that's for sale, best deal first.
-  const deals = LISTINGS.filter((l) => l.status === "for_sale" && l.generation === spec.generation && l.trim === spec.trim)
-    .map((listing) => ({
-      listing,
-      score: dealScore(listing, ctx),
-      matches: featuresMatchingSpec(listing, spec, ctx.table),
-    }))
-    .sort((a, b) => b.score - a.score);
+  const carsForSale = LISTINGS.filter(
+    (listing) => listing.status === "for_sale" && listing.generation === spec.generation && listing.trim === spec.trim,
+  );
+  const scoredDeals = carsForSale.map((listing) => ({
+    listing,
+    score: dealScore(listing, ctx),
+    matches: featuresMatchingSpec(listing, spec, ctx.table),
+  }));
+  const deals = scoredDeals.sort((first, second) => second.score - first.score);
 
   return (
     <main className="mx-auto max-w-7xl px-5 py-10">
@@ -33,13 +39,13 @@ export default async function DealsPage({ searchParams }: { searchParams: Promis
         <label>
           <span className="eyebrow block">Generation</span>
           <select name="g" defaultValue={spec.generation} className="mt-1 rounded-lg border border-line bg-panel px-3 py-2">
-            {GENERATIONS.map((g) => <option key={g}>{g}</option>)}
+            {GENERATIONS.map((generation) => <option key={generation}>{generation}</option>)}
           </select>
         </label>
         <label>
           <span className="eyebrow block">Model</span>
           <select name="t" defaultValue={spec.trim} className="mt-1 rounded-lg border border-line bg-panel px-3 py-2">
-            {[...new Set(GENERATIONS.flatMap((g) => trimsFor(g).map((t) => t.trim)))].map((t) => <option key={t}>{t}</option>)}
+            {ALL_TRIM_NAMES.map((trim) => <option key={trim}>{trim}</option>)}
           </select>
         </label>
         <input type="hidden" name="x" value={spec.transmission} />
@@ -53,18 +59,18 @@ export default async function DealsPage({ searchParams }: { searchParams: Promis
         <p className="mt-10 text-muted">No {spec.generation} {spec.trim} listings for sale right now.</p>
       ) : (
         <ul className="mt-8 grid gap-4 md:grid-cols-2">
-          {deals.map(({ listing: l, score, matches }) => {
+          {deals.map(({ listing, score, matches }) => {
             const isUnderMarket = score > 0;
             return (
-              <li key={l.id} className="rounded-2xl border border-line bg-panel p-5">
+              <li key={listing.id} className="rounded-2xl border border-line bg-panel p-5">
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <p className="font-display text-2xl">
-                      {l.modelYear} {l.trim} {l.body}
+                      {listing.modelYear} {listing.trim} {listing.body}
                     </p>
                     <p className="mt-1 flex items-center gap-2 text-sm text-muted">
-                      <span className="inline-block h-3 w-3 rounded-full border border-white/20" style={{ background: colorDef(l.color)?.hex }} />
-                      {l.color} · {l.transmission} · {l.mileage.toLocaleString()} mi
+                      <span className="inline-block h-3 w-3 rounded-full border border-white/20" style={{ background: colorDef(listing.color)?.hex }} />
+                      {listing.color} · {listing.transmission} · {listing.mileage.toLocaleString()} mi
                     </p>
                   </div>
                   <span className={`tabular shrink-0 rounded-full px-3 py-1 text-sm ${isUnderMarket ? "bg-holder/15 text-holder" : "bg-pit/15 text-pit"}`}>
@@ -72,10 +78,10 @@ export default async function DealsPage({ searchParams }: { searchParams: Promis
                   </span>
                 </div>
                 <div className="tabular mt-4 flex items-baseline gap-3">
-                  <span className="text-2xl">{usd(l.price)}</span>
-                  <span className="text-sm text-muted">asking{l.dom !== undefined && ` · ${l.dom} days listed`}</span>
-                  {l.vdpUrl && (
-                    <a href={l.vdpUrl} target="_blank" rel="noopener noreferrer" className="ml-auto text-sm text-muted underline hover:text-ink">
+                  <span className="text-2xl">{usd(listing.price)}</span>
+                  <span className="text-sm text-muted">asking{listing.dom !== undefined && ` · ${listing.dom} days listed`}</span>
+                  {listing.vdpUrl && (
+                    <a href={listing.vdpUrl} target="_blank" rel="noopener noreferrer" className="ml-auto text-sm text-muted underline hover:text-ink">
                       View listing ↗
                     </a>
                   )}

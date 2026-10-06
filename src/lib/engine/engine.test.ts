@@ -13,11 +13,14 @@ import {
   tierFor,
 } from "./index";
 
-let n = 0;
-function car(over: Partial<Listing> = {}): Listing {
-  n++;
+/** Gives every test car a unique id. */
+let carCount = 0;
+
+/** A plain 992.1 Carrera S listing; pass only the fields a test cares about. */
+function car(overrides: Partial<Listing> = {}): Listing {
+  carCount++;
   return {
-    id: `T${n}`,
+    id: `T${carCount}`,
     generation: "992.1",
     modelYear: 2022,
     trim: "Carrera S",
@@ -31,7 +34,7 @@ function car(over: Partial<Listing> = {}): Listing {
     price: 100000,
     status: "sold",
     date: "2026-01-01",
-    ...over,
+    ...overrides,
   };
 }
 
@@ -51,8 +54,8 @@ describe("mileage regression", () => {
 
   it("normalizes every car to 15K miles", () => {
     const rows = [car({ mileage: 5000, price: 104000 }), car({ mileage: 25000, price: 96000 }), car({ mileage: 45000, price: 88000 })];
-    const adj = mileageAdjust(rows);
-    for (const a of adj) expect(a.adjustedPrice).toBeCloseTo(100000, 3);
+    const adjusted = mileageAdjust(rows);
+    for (const listing of adjusted) expect(listing.adjustedPrice).toBeCloseTo(100000, 3);
   });
 });
 
@@ -60,12 +63,15 @@ describe("option premium", () => {
   it("finds a planted effect", () => {
     const rows: Listing[] = [];
     for (let i = 0; i < 40; i++) {
-      const has = i % 2 === 0;
-      rows.push(car({ options: has ? ["SPORT_CHRONO"] : [], mileage: 10000 + i * 500, price: 100000 - 0.3 * (10000 + i * 500) + (has ? 4000 : 0) }));
+      const hasOption = i % 2 === 0;
+      const mileage = 10000 + i * 500;
+      const optionBump = hasOption ? 4000 : 0;
+      const price = 100000 - 0.3 * mileage + optionBump;
+      rows.push(car({ options: hasOption ? ["SPORT_CHRONO"] : [], mileage, price }));
     }
-    const p = optionPremium(rows, "SPORT_CHRONO");
-    expect(p.premiumUsd).toBeCloseTo(4000, -2);
-    expect(p.confidence).not.toBe("low");
+    const premium = optionPremium(rows, "SPORT_CHRONO");
+    expect(premium.premiumUsd).toBeCloseTo(4000, -2);
+    expect(premium.confidence).not.toBe("low");
   });
 
   it("flags low confidence when either side has fewer than 5 cars", () => {
@@ -73,9 +79,9 @@ describe("option premium", () => {
       ...Array.from({ length: 10 }, () => car()),
       ...Array.from({ length: 3 }, () => car({ options: ["PCCB"], price: 102000 })),
     ];
-    const p = optionPremium(rows, "PCCB");
-    expect(p.sampleWith).toBe(3);
-    expect(p.confidence).toBe("low");
+    const premium = optionPremium(rows, "PCCB");
+    expect(premium.sampleWith).toBe(3);
+    expect(premium.confidence).toBe("low");
   });
 });
 
@@ -106,14 +112,14 @@ describe("modeled dataset (planted effects)", () => {
     expect(table.options.PCCB.tier).toBe("Money Pit");
   });
   it("estimates a plausible range for a 992.1 Carrera S", () => {
-    const est = estimateBuild(
+    const estimate = estimateBuild(
       { generation: "992.1", trim: "Carrera S", body: "Coupe", transmission: "Manual", color: "Chalk", options: ["SPORT_CHRONO"] },
       { listings },
     )!;
-    expect(est.low).toBeLessThan(est.mid);
-    expect(est.mid).toBeLessThan(est.high);
-    expect(est.mid).toBeGreaterThan(70000);
-    expect(est.mid).toBeLessThan(140000);
+    expect(estimate.low).toBeLessThan(estimate.mid);
+    expect(estimate.mid).toBeLessThan(estimate.high);
+    expect(estimate.mid).toBeGreaterThan(70000);
+    expect(estimate.mid).toBeLessThan(140000);
   });
 });
 

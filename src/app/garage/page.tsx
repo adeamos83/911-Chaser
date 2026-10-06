@@ -8,7 +8,13 @@ import { LISTINGS, getPremiumTable } from "@/lib/market";
 import { normalizeSpec, specToQuery, usd } from "@/lib/spec";
 import { createClient } from "@/lib/supabase/server";
 import { deleteBuild, renameBuild } from "../actions";
+import { MAX_BUILD_NAME_LENGTH } from "@/lib/limits";
 
+// Paint shown when a saved color is no longer in the catalog.
+const FALLBACK_PAINT_HEX = "#888";
+const MILES_PER_THOUSAND = 1000;
+
+/** The signed-in user's saved builds, each with a price estimate and rename, open, and delete controls. */
 export default async function GaragePage() {
   const supabase = await createClient();
   const {
@@ -39,18 +45,20 @@ export default async function GaragePage() {
       )}
 
       <ul className="mt-8 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-        {builds?.map((b) => {
-          const spec = normalizeSpec(b.spec as BuildSpec);
-          const est = estimateBuild(spec, ctx);
+        {builds?.map((build) => {
+          const spec = normalizeSpec(build.spec as BuildSpec);
+          const estimate = estimateBuild(spec, ctx);
+          const paintHex = colorDef(spec.color)?.hex ?? FALLBACK_PAINT_HEX;
+          const buildQuery = specToQuery(spec);
           return (
-            <li key={b.id} className="flex flex-col rounded-2xl border border-line bg-panel p-5">
-              <Car911 color={colorDef(spec.color)?.hex ?? "#888"} className="w-full" />
+            <li key={build.id} className="flex flex-col rounded-2xl border border-line bg-panel p-5">
+              <Car911 color={paintHex} className="w-full" />
               <form action={renameBuild} className="mt-2 flex gap-2">
-                <input type="hidden" name="id" value={b.id} />
+                <input type="hidden" name="id" value={build.id} />
                 <input
                   name="name"
-                  defaultValue={b.name}
-                  maxLength={80}
+                  defaultValue={build.name}
+                  maxLength={MAX_BUILD_NAME_LENGTH}
                   aria-label="Build name"
                   className="min-w-0 flex-1 border-b border-transparent bg-transparent font-display text-2xl outline-none hover:border-line focus:border-accent"
                 />
@@ -59,12 +67,17 @@ export default async function GaragePage() {
               <p className="mt-1 text-sm text-muted">
                 {spec.generation} {spec.trim} {spec.body} · {spec.transmission} · {spec.color} · {spec.options.length} options
               </p>
-              {est && <p className="tabular mt-3 text-xl">{usd(est.mid)} <span className="text-sm text-muted">typical asking at {Math.round(est.mileage / 1000)}K mi</span></p>}
+              {estimate && (
+                <p className="tabular mt-3 text-xl">
+                  {usd(estimate.mid)}{" "}
+                  <span className="text-sm text-muted">typical asking at {Math.round(estimate.mileage / MILES_PER_THOUSAND)}K mi</span>
+                </p>
+              )}
               <div className="mt-auto flex items-center gap-4 pt-5 text-sm">
-                <Link href={`/build?${specToQuery(spec)}`} className="rounded-full bg-ink px-4 py-2 font-medium text-bg hover:bg-white">Open</Link>
-                <Link href={`/deals?${specToQuery(spec)}`} className="text-muted hover:text-ink">Deals</Link>
+                <Link href={`/build?${buildQuery}`} className="rounded-full bg-ink px-4 py-2 font-medium text-bg hover:bg-white">Open</Link>
+                <Link href={`/deals?${buildQuery}`} className="text-muted hover:text-ink">Deals</Link>
                 <form action={deleteBuild} className="ml-auto">
-                  <input type="hidden" name="id" value={b.id} />
+                  <input type="hidden" name="id" value={build.id} />
                   <button className="text-pit/80 hover:text-pit">Delete</button>
                 </form>
               </div>

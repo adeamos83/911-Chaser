@@ -13,6 +13,8 @@ const TIERS: { tier: ValueTier; blurb: string; color: string }[] = [
 const FULL_BAR_PAYBACK = 1.5;
 /** Even a negative payback shows a sliver of bar, so the row doesn't look broken. */
 const MIN_BAR_PERCENT = 2;
+/** A payback at or above FULL_BAR_PAYBACK fills the bar completely. */
+const MAX_BAR_PERCENT = 100;
 
 interface Props {
   optionValues: OptionValue[];
@@ -35,9 +37,11 @@ export function OptionsList({ optionValues, spec, onToggle }: Props) {
 
       <div className="mt-3 space-y-6">
         {TIERS.map(({ tier, blurb, color }) => {
-          const rows = optionValues
-            .filter((o) => o.tier === tier && optionAvailableOn(o.code, spec.body))
-            .sort((a, b) => b.payback - a.payback);
+          // This tier's options that fit the chosen body, best payback first.
+          const optionsInTier = optionValues.filter(
+            (option) => option.tier === tier && optionAvailableOn(option.code, spec.body),
+          );
+          const rows = optionsInTier.sort((first, second) => second.payback - first.payback);
           return (
             <div key={tier}>
               <div className="flex items-baseline gap-3 border-b border-line pb-2">
@@ -63,10 +67,13 @@ export function OptionsList({ optionValues, spec, onToggle }: Props) {
   );
 }
 
+/** One option: checkbox, name and price, a payback bar, and the payback percent. */
 function OptionRow({ option, color, checked, onToggle }: { option: OptionValue; color: string; checked: boolean; onToggle: () => void }) {
   // Paint to Sample can't be ticked by hand: it follows the paint choice.
   const locked = option.code === "PTS";
-  const barPercent = Math.max(MIN_BAR_PERCENT, Math.min(100, (option.payback / FULL_BAR_PAYBACK) * 100));
+  const rawBarPercent = (option.payback / FULL_BAR_PAYBACK) * 100;
+  const barPercent = Math.max(MIN_BAR_PERCENT, Math.min(MAX_BAR_PERCENT, rawBarPercent));
+  const paybackPercent = Math.round(option.payback * 100);
 
   return (
     <li>
@@ -83,7 +90,7 @@ function OptionRow({ option, color, checked, onToggle }: { option: OptionValue; 
         <span className="h-1.5 rounded-full bg-line">
           <span className="block h-full rounded-full" style={{ width: `${barPercent}%`, background: color }} />
         </span>
-        <span className="tabular text-right text-sm" style={{ color }}>{Math.round(option.payback * 100)}%</span>
+        <span className="tabular text-right text-sm" style={{ color }}>{paybackPercent}%</span>
       </label>
     </li>
   );

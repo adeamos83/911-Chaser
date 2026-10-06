@@ -7,6 +7,8 @@ import { SaveButton } from "./SaveButton";
 /** The mileage slider's range, in miles. */
 const MAX_SLIDER_MILES = 120000;
 const SLIDER_STEP_MILES = 1000;
+/** Miles are shown in thousands, e.g. 42K. */
+const MILES_PER_K = 1000;
 
 interface Props {
   /** The spec being built right now (used for saving and the deals link). */
@@ -25,6 +27,9 @@ interface Props {
 
 /** The headline price estimate, mileage slider, and save / deals buttons. */
 export function PriceCard({ spec, shownSpec, estimate, pending, mileage, onMileageChange, signedIn, dataAsOf }: Props) {
+  // Dim the old numbers while new ones are loading.
+  const fadeClass = pending ? "opacity-40" : "opacity-100";
+
   return (
     <div className="rounded-2xl border border-line bg-panel p-6">
       <div className="flex items-center justify-between">
@@ -33,14 +38,14 @@ export function PriceCard({ spec, shownSpec, estimate, pending, mileage, onMilea
       </div>
 
       {estimate ? (
-        <div className={`transition-opacity duration-300 ${pending ? "opacity-40" : "opacity-100"}`}>
+        <div className={`transition-opacity duration-300 ${fadeClass}`}>
           <p className="tabular mt-3 font-display text-6xl">{usd(estimate.mid)}</p>
           <p className="tabular mt-1 text-muted">
-            Typical range {usd(estimate.low)} to {usd(estimate.high)} at {Math.round(estimate.mileage / 1000)}K miles
+            Typical range {usd(estimate.low)} to {usd(estimate.high)} at {Math.round(estimate.mileage / MILES_PER_K)}K miles
           </p>
           <p className="mt-1 text-xs text-muted">
             Based on {estimate.sample} real {shownSpec.generation} {shownSpec.trim} listings (MarketCheck, {dataAsOf}). Typical car in this set has{" "}
-            {Math.round(estimate.medianMileage / 1000)}K miles.
+            {Math.round(estimate.medianMileage / MILES_PER_K)}K miles.
           </p>
           <label className="mt-5 block">
             <span className="flex justify-between text-xs text-muted">
@@ -60,7 +65,7 @@ export function PriceCard({ spec, shownSpec, estimate, pending, mileage, onMilea
               max={MAX_SLIDER_MILES}
               step={SLIDER_STEP_MILES}
               value={mileage ?? estimate.medianMileage}
-              onChange={(e) => onMileageChange(Number(e.target.value))}
+              onChange={(event) => onMileageChange(Number(event.target.value))}
               className="mt-2 w-full accent-[var(--accent)]"
             />
           </label>
@@ -85,6 +90,7 @@ const CONFIDENCE_COLORS: Record<Confidence, string> = {
   low: "var(--pit)",
 };
 
+/** A small colored badge: "high confidence", "medium confidence" or "low confidence". */
 function ConfidencePill({ level }: { level: Confidence }) {
   const color = CONFIDENCE_COLORS[level];
   return (

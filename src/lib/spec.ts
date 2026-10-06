@@ -1,6 +1,7 @@
 import { GENERATIONS, OPTIONS, bodiesFor, colorDef, colorsFor, optionAvailableOn, trimSpec, trimsFor } from "@/data/catalog";
 import type { BuildSpec, Generation, Trim } from "@/data/types";
 
+/** The build shown when the page opens with no spec in the URL. */
 export const DEFAULT_SPEC: BuildSpec = {
   generation: "992.1",
   trim: "Carrera S",
@@ -21,13 +22,14 @@ export function normalizeSpec(input: Partial<BuildSpec>): BuildSpec {
     : DEFAULT_SPEC.generation;
 
   const trim = pickTrim(generation, input.trim);
-  const body = bodiesFor(trim).includes(input.body as BuildSpec["body"]) ? (input.body as BuildSpec["body"]) : "Coupe";
+  const requestedBody = input.body as BuildSpec["body"];
+  const body = bodiesFor(trim).includes(requestedBody) ? requestedBody : "Coupe";
 
   const manualAvailable = trimSpec(generation, trim)?.manualAvailable ?? false;
   const transmission = input.transmission === "Manual" && manualAvailable ? "Manual" : "PDK";
 
   const colors = colorsFor(generation);
-  const color = colors.find((c) => c.name === input.color)?.name ?? colors[0].name;
+  const color = colors.find((colorOption) => colorOption.name === input.color)?.name ?? colors[0].name;
 
   // The PTS option is never picked by hand: it's on exactly when the paint is Paint to Sample.
   const isPaintToSample = colorDef(color)?.tier === "PTS";
@@ -42,7 +44,7 @@ export function normalizeSpec(input: Partial<BuildSpec>): BuildSpec {
 
 /** Keep the requested trim if this generation has it; otherwise prefer Carrera S, then the first trim. */
 function pickTrim(generation: Generation, requested: Trim | undefined): Trim {
-  const available = trimsFor(generation).map((t) => t.trim);
+  const available = trimsFor(generation).map((trimInfo) => trimInfo.trim);
   if (requested && available.includes(requested)) return requested;
   if (available.includes("Carrera S")) return "Carrera S";
   return available[0];
@@ -61,6 +63,7 @@ export function specToQuery(spec: BuildSpec): string {
   return params.toString();
 }
 
+/** Reads a spec back out of the URL query (the reverse of `specToQuery`). */
 export function specFromParams(params: Record<string, string | string[] | undefined>): BuildSpec {
   // Next.js gives an array when a key repeats in the URL; we only use the first value.
   const get = (key: string): string | undefined => {
@@ -79,13 +82,14 @@ export function specFromParams(params: Record<string, string | string[] | undefi
   });
 }
 
+/** A readable name for a saved build, e.g. "992.1 Carrera S in Chalk". */
 export function defaultBuildName(spec: BuildSpec) {
   return `${spec.generation} ${spec.trim} in ${spec.color.replace(" (PTS)", "")}`;
 }
 
 /** 123456.7 -> "$123,457" */
-export const usd = (n: number) =>
-  n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+export const usd = (amount: number) =>
+  amount.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 
 /** 98765 -> "$99K" */
-export const usdK = (n: number) => `$${Math.round(n / 1000)}K`;
+export const usdK = (amount: number) => `$${Math.round(amount / 1000)}K`;

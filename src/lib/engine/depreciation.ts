@@ -6,6 +6,12 @@ import type { Generation, Listing, Trim } from "@/data/types";
 import { MIN_LISTINGS_TO_FIT, REF_MILEAGE } from "./rules";
 import { mean, median } from "./stats";
 
+/**
+ * How close to zero the determinant may get (relative to the spreads) before we decide mileage
+ * and year are too tangled to separate. Tiny, so it only trips on near-perfect lockstep.
+ */
+const LOCKSTEP_TOLERANCE = 1e-9;
+
 // ---------- 1. cohort ----------
 
 /** A "cohort" is every listing of the same generation and trim, e.g. all 992.1 Carrera S cars. */
@@ -17,8 +23,9 @@ export function cohort(listings: Listing[], key: { generation: Generation; trim:
 function groupByCohort(listings: Listing[]): Listing[][] {
   const groups = new Map<string, Listing[]>();
   for (const listing of listings) {
-    const key = `${listing.generation}|${listing.trim}`;
-    groups.set(key, [...(groups.get(key) ?? []), listing]);
+    const cohortKey = `${listing.generation}|${listing.trim}`;
+    const groupSoFar = groups.get(cohortKey) ?? [];
+    groups.set(cohortKey, [...groupSoFar, listing]);
   }
   return [...groups.values()];
 }
@@ -41,7 +48,9 @@ export interface CohortFit {
 
 /**
  * Learns how much price drops per mile and per model year, using a standard
- * two-variable linear regression (ordinary least squares).
+ * two-variable linear regression (ordinary least squares). A regression finds the straight
+ * line that sits closest to every car's price; its "slopes" are the dollars per mile and
+ * dollars per year.
  *
  * Why both at once: older cars also tend to have more miles. Fitting mileage alone would
  * blame the mileage for what is really the age discount.
@@ -51,27 +60,35 @@ export interface CohortFit {
  *   - Fewer than 3 cars, or every car has the same mileage: no slopes, just the median price.
  */
 export function fitCohort(rows: Listing[]): CohortFit {
-  const refYear = Math.round(median(rows.map((r) => r.modelYear)));
-  const medianOnly: CohortFit = { intercept: median(rows.map((r) => r.price)), perMile: 0, perYear: 0, refYear };
+  const refYear = Math.round(median(rows.map((listing) => listing.modelYear)));
+  const medianPrice = median(rows.map((listing) => listing.price));
+  const medianOnly: CohortFit = { intercept: medianPrice, perMile: 0, perYear: 0, refYear };
   if (rows.length < MIN_LISTINGS_TO_FIT) return medianOnly;
 
-  const t = regressionTotals(rows);
+  const totals = regressionTotals(rows);
 
   // The determinant is close to zero when mileage and year move in lockstep,
   // which means their separate effects can't be told apart.
-  const determinant = t.milesSpread * t.yearSpread - t.milesYearTogether * t.milesYearTogether;
-  const canFitBoth =
-    t.milesSpread > 0 && t.yearSpread > 0 && Math.abs(determinant) > 1e-9 * t.milesSpread * t.yearSpread;
+  const determinant = totals.milesSpread * totals.yearSpread - totals.milesYearTogether * totals.milesYearTogether;
+  const bothVary = totals.milesSpread > 0 && totals.yearSpread > 0;
+  const notInLockstep = Math.abs(determinant) > LOCKSTEP_TOLERANCE * totals.milesSpread * totals.yearSpread;
+  const canFitBoth = bothVary && notInLockstep;
 
   if (canFitBoth) {
-    const perMile = (t.milesPriceTogether * t.yearSpread - t.yearPriceTogether * t.milesYearTogether) / determinant;
-    const perYear = (t.yearPriceTogether * t.milesSpread - t.milesPriceTogether * t.milesYearTogether) / determinant;
-    return { intercept: t.avgPrice - perMile * t.avgMiles - perYear * t.avgYear, perMile, perYear, refYear };
+    const perMileNumerator =
+      totals.milesPriceTogether * totals.yearSpread - totals.yearPriceTogether * totals.milesYearTogether;
+    const perYearNumerator =
+      totals.yearPriceTogether * totals.milesSpread - totals.milesPriceTogether * totals.milesYearTogether;
+    const perMile = perMileNumerator / determinant;
+    const perYear = perYearNumerator / determinant;
+    const intercept = totals.avgPrice - perMile * totals.avgMiles - perYear * totals.avgYear;
+    return { intercept, perMile, perYear, refYear };
   }
 
-  if (t.milesSpread > 0) {
-    const perMile = t.milesPriceTogether / t.milesSpread;
-    return { intercept: t.avgPrice - perMile * t.avgMiles, perMile, perYear: 0, refYear };
+  if (totals.milesSpread > 0) {
+    const perMile = totals.milesPriceTogether / totals.milesSpread;
+    const intercept = totals.avgPrice - perMile * totals.avgMiles;
+    return { intercept, perMile, perYear: 0, refYear };
   }
 
   return medianOnly;
@@ -82,9 +99,9 @@ export function fitCohort(rows: Listing[]): CohortFit {
  * around its average; each "together" measures how much two values rise and fall together.
  */
 function regressionTotals(rows: Listing[]) {
-  const avgMiles = mean(rows.map((r) => r.mileage));
-  const avgYear = mean(rows.map((r) => r.modelYear));
-  const avgPrice = mean(rows.map((r) => r.price));
+  const avgMiles = mean(rows.map((listing) => listing.mileage));
+  const avgYear = mean(rows.map((listing) => listing.modelYear));
+  const avgPrice = mean(rows.map((listing) => listing.price));
 
   let milesSpread = 0;
   let yearSpread = 0;
@@ -92,10 +109,10 @@ function regressionTotals(rows: Listing[]) {
   let milesPriceTogether = 0;
   let yearPriceTogether = 0;
 
-  for (const r of rows) {
-    const milesOffset = r.mileage - avgMiles;
-    const yearOffset = r.modelYear - avgYear;
-    const priceOffset = r.price - avgPrice;
+  for (const listing of rows) {
+    const milesOffset = listing.mileage - avgMiles;
+    const yearOffset = listing.modelYear - avgYear;
+    const priceOffset = listing.price - avgPrice;
     milesSpread += milesOffset * milesOffset;
     yearSpread += yearOffset * yearOffset;
     milesYearTogether += milesOffset * yearOffset;
@@ -111,11 +128,12 @@ export interface AdjustedListing extends Listing {
   adjustedPrice: number;
 }
 
+/** Restates every price at 15K miles and the cohort's typical year, using the fitted slopes. */
 export function mileageAdjust(rows: Listing[], fit = fitCohort(rows)): AdjustedListing[] {
-  return rows.map((r) => {
-    const mileageEffect = fit.perMile * (r.mileage - REF_MILEAGE);
-    const yearEffect = fit.perYear * (r.modelYear - fit.refYear);
-    return { ...r, adjustedPrice: r.price - mileageEffect - yearEffect };
+  return rows.map((listing) => {
+    const mileageEffect = fit.perMile * (listing.mileage - REF_MILEAGE);
+    const yearEffect = fit.perYear * (listing.modelYear - fit.refYear);
+    return { ...listing, adjustedPrice: listing.price - mileageEffect - yearEffect };
   });
 }
 
@@ -131,7 +149,7 @@ export type ListingWithResidual = AdjustedListing & {
 export function residuals(listings: Listing[]): ListingWithResidual[] {
   return groupByCohort(listings).flatMap((rows) => {
     const adjusted = mileageAdjust(rows);
-    const cohortMedian = median(adjusted.map((a) => a.adjustedPrice));
-    return adjusted.map((a) => ({ ...a, residual: a.adjustedPrice - cohortMedian }));
+    const cohortMedian = median(adjusted.map((listing) => listing.adjustedPrice));
+    return adjusted.map((listing) => ({ ...listing, residual: listing.adjustedPrice - cohortMedian }));
   });
 }
