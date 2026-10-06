@@ -1,7 +1,10 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-/** Refreshes the Supabase session cookie on every request and sends signed-out visitors away from /garage. */
+/** Pages only members can see. Signed-out visitors are sent to log in, then brought back. */
+const MEMBERS_ONLY = ["/build", "/deals", "/garage"];
+
+/** Refreshes the Supabase session cookie on every request and sends signed-out visitors away from members-only pages. */
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
   const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
@@ -19,10 +22,11 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user && request.nextUrl.pathname.startsWith("/garage")) {
+  const { pathname, search } = request.nextUrl;
+  if (!user && MEMBERS_ONLY.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    url.search = "?next=/garage";
+    url.search = `?next=${encodeURIComponent(pathname + search)}`;
     return NextResponse.redirect(url);
   }
   return response;
