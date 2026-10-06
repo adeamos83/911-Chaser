@@ -1,4 +1,4 @@
-# Dream 911 Chaser
+# 911 Chaser
 
 I don't own a Porsche 911 yet. I want one. This app is for people like me who are chasing that dream and want to buy the *right* 911 when the day comes.
 
