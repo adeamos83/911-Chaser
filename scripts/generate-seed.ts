@@ -126,6 +126,6 @@ for (let i = 0; i < COUNT; i++) {
   });
 }
 
-const out = join(__dirname, "..", "src", "data", "listings.json");
+const out = join(__dirname, "..", "src", "data", "listings.modeled.json");
 writeFileSync(out, JSON.stringify(listings));
 console.log(`Wrote ${listings.length} listings to ${out}`);

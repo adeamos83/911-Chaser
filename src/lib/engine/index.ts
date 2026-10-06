@@ -129,12 +129,14 @@ export function premiumWhere(
 }
 
 /** Median adjusted price with the option minus without. Pool = any set of listings. */
+const optionsKnown = (l: Listing) => l.optionsKnown !== false;
+
 export function optionPremium(listings: Listing[], optionCode: string): Premium {
   const def = optionDef(optionCode);
   return premiumWhere(
     residuals(listings),
     (l) => l.options.includes(optionCode),
-    (l) => !def?.bodies || def.bodies.includes(l.body),
+    (l) => optionsKnown(l) && (!def?.bodies || def.bodies.includes(l.body)),
   );
 }
 
@@ -162,6 +164,8 @@ export interface PremiumTable {
   options: Record<string, OptionValue>;
   manual: Premium;
   colorTier: Record<ColorTier, Premium>;
+  /** Average option premium on cars whose option sheet we know; stands in for cars where we don't. */
+  avgOptionContent: number;
 }
 
 /** Every premium the estimator needs, computed once for a pool (usually one generation). */
@@ -172,7 +176,7 @@ export function premiumTable(pool: Listing[]): PremiumTable {
     const p = premiumWhere(
       res,
       (l) => l.options.includes(o.code),
-      (l) => !o.bodies || o.bodies.includes(l.body),
+      (l) => optionsKnown(l) && (!o.bodies || o.bodies.includes(l.body)),
     );
     const payback = paybackPct(p.premiumUsd, o.msrpCost);
     options[o.code] = { ...p, code: o.code, name: o.name, msrpCost: o.msrpCost, payback, tier: tierFor(payback) };
@@ -185,7 +189,12 @@ export function premiumTable(pool: Listing[]): PremiumTable {
   );
   const vsStandard = (tier: ColorTier) =>
     premiumWhere(res, (l) => l.colorTier === tier, (l) => l.colorTier === tier || l.colorTier === "Standard");
+  const known = pool.filter(optionsKnown);
+  const avgOptionContent = known.length
+    ? known.reduce((s, l) => s + l.options.reduce((t, c) => t + (options[c]?.premiumUsd ?? 0), 0), 0) / known.length
+    : 0;
   return {
+    avgOptionContent,
     options,
     manual,
     // PTS value is carried by the PTS option itself, so the tier premium stays zero.
@@ -226,14 +235,19 @@ export interface Estimate {
   high: number;
   confidence: Confidence;
   sample: number;
+  /** Mileage the estimate is stated at. */
+  mileage: number;
+  /** Typical mileage in the comparable set. */
+  medianMileage: number;
 }
 
 function specPremium(
-  spec: Pick<BuildSpec, "transmission" | "options"> & { colorTier: ColorTier },
+  spec: Pick<BuildSpec, "transmission" | "options"> & { colorTier: ColorTier; optionsKnown?: boolean },
   table: PremiumTable,
 ) {
   let total = 0;
-  for (const code of spec.options) total += table.options[code]?.premiumUsd ?? 0;
+  if (spec.optionsKnown === false) total += table.avgOptionContent;
+  else for (const code of spec.options) total += table.options[code]?.premiumUsd ?? 0;
   if (spec.transmission === "Manual") total += table.manual.premiumUsd;
   total += table.colorTier[spec.colorTier].premiumUsd;
   return total;
@@ -247,12 +261,13 @@ export interface EstimateContext {
 
 /**
  * Strip every known premium off each comparable car to get a "bare" price distribution,
- * then add back the premiums this spec actually has. Adjusts to a given mileage/year if passed.
+ * then add back the premiums this spec actually has. Stated at the cohort's typical mileage
+ * unless a mileage (and optionally model year) is passed.
  */
 export function estimateBuild(
   spec: BuildSpec,
   ctx: EstimateContext,
-  at?: { mileage: number; modelYear: number },
+  at?: { mileage?: number; modelYear?: number },
 ): Estimate | null {
   const rows = cohort(ctx.listings, spec);
   if (rows.length === 0) return null;
@@ -260,10 +275,13 @@ export function estimateBuild(
   const fit = fitCohort(rows);
   const bare = mileageAdjust(rows, fit).map((r) => r.adjustedPrice - specPremium(r, table));
 
-  const tier = colorDef(spec.color)?.tier ?? "Standard";
+  const tier = colorDef(spec.color)?.tier ?? spec.colorTier ?? "Standard";
   const options = tier === "PTS" && !spec.options.includes("PTS") ? [...spec.options, "PTS"] : spec.options;
-  let add = specPremium({ ...spec, options, colorTier: tier }, table);
-  if (at) add += fit.perMile * (at.mileage - REF_MILEAGE) + fit.perYear * (at.modelYear - fit.refYear);
+  const medianMileage = Math.round(median(rows.map((r) => r.mileage)));
+  const mileage = at?.mileage ?? medianMileage;
+  let add = specPremium({ ...spec, options, colorTier: tier, optionsKnown: true }, table);
+  add += fit.perMile * (mileage - REF_MILEAGE);
+  if (at?.modelYear !== undefined) add += fit.perYear * (at.modelYear - fit.refYear);
 
   return {
     low: quantile(bare, 0.25) + add,
@@ -271,13 +289,15 @@ export function estimateBuild(
     high: quantile(bare, 0.75) + add,
     confidence: rows.length < MIN_SAMPLE ? "low" : rows.length < 30 ? "medium" : "high",
     sample: rows.length,
+    mileage,
+    medianMileage,
   };
 }
 
 // ---------- 8. deal score ----------
 
 export function specOf(l: Listing): BuildSpec {
-  return { generation: l.generation, trim: l.trim, body: l.body, transmission: l.transmission, color: l.color, options: l.options };
+  return { generation: l.generation, trim: l.trim, body: l.body, transmission: l.transmission, color: l.color, colorTier: l.colorTier, options: l.options };
 }
 
 /** Positive = priced under what the model expects for this exact car. */

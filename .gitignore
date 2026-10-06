@@ -44,3 +44,4 @@ next-env.d.ts
 .claude/
 IMPLEMENTATION_PLAN.md
 temporary screenshots/
+.cache/

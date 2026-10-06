@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "seed": "tsx scripts/generate-seed.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "pull": "tsx --env-file=.env.local scripts/pull-marketcheck.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

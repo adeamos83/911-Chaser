@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Listing } from "@/data/types";
-import listingsJson from "@/data/listings.json";
+import listingsJson from "@/data/listings.modeled.json";
 import {
   dealScore,
   estimateBuild,
@@ -97,7 +97,7 @@ describe("deal score", () => {
   });
 });
 
-describe("seed dataset", () => {
+describe("modeled dataset (planted effects)", () => {
   const listings = listingsJson as Listing[];
   const table = premiumTable(listings);
   it("shows Sport Chrono as a value holder and PCCB as a money pit", () => {

@@ -54,6 +54,10 @@ export interface Listing {
   price: number;
   status: "sold" | "for_sale";
   date: string;
+  /** False when we only have the listing, not its option sheet. */
+  optionsKnown?: boolean;
+  vdpUrl?: string;
+  dom?: number;
 }
 
 export interface BuildSpec {
@@ -63,4 +67,6 @@ export interface BuildSpec {
   transmission: Transmission;
   color: string;
   options: string[];
+  /** For listing colors outside the catalog. */
+  colorTier?: ColorTier;
 }

@@ -32,6 +32,7 @@ export const TRIMS: TrimSpec[] = [
   { generation: "992.2", trim: "Carrera", years: [2025, 2026], hp: 388, zeroToSixty: 3.9, baseMsrp: 120000, manualAvailable: false },
   { generation: "992.2", trim: "Carrera T", years: [2025, 2026], hp: 388, zeroToSixty: 4.3, baseMsrp: 135000, manualAvailable: true },
   { generation: "992.2", trim: "Carrera S", years: [2025, 2026], hp: 473, zeroToSixty: 3.3, baseMsrp: 140000, manualAvailable: false },
+  { generation: "992.2", trim: "Carrera 4S", years: [2025, 2026], hp: 473, zeroToSixty: 3.2, baseMsrp: 148000, manualAvailable: false },
   { generation: "992.2", trim: "GTS", years: [2025, 2026], hp: 532, zeroToSixty: 2.9, baseMsrp: 165000, manualAvailable: false },
   { generation: "992.2", trim: "Turbo S", years: [2025, 2026], hp: 701, zeroToSixty: 2.4, baseMsrp: 230000, manualAvailable: false },
 ];
@@ -82,9 +83,9 @@ export function trimSpec(generation: Generation, trim: Trim): TrimSpec | undefin
   return TRIMS.find((t) => t.generation === generation && t.trim === trim);
 }
 
-/** Targa is AWD only: in this lineup that means Carrera 4S and GTS. Turbos ship as Coupe/Cab. */
+/** Targa is AWD only: Targa 4 (filed under Carrera), Targa 4S and Targa 4 GTS. Turbos ship as Coupe/Cab. */
 export function bodiesFor(trim: Trim): Body[] {
-  if (trim === "Carrera 4S" || trim === "GTS") return BODIES;
+  if (trim === "Carrera" || trim === "Carrera 4S" || trim === "GTS") return BODIES;
   return ["Coupe", "Cabriolet"];
 }
 
