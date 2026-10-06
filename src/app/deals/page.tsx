@@ -1,23 +1,21 @@
 import Link from "next/link";
 import { GENERATIONS, colorDef, trimsFor } from "@/data/catalog";
-import { dealScore } from "@/lib/engine";
-import { LISTINGS, getPremiumTable } from "@/lib/market";
+import type { BuildSpec, Listing } from "@/data/types";
+import { dealScore, type PremiumTable } from "@/lib/engine";
+import { DATA_AS_OF, LISTINGS, getPremiumTable } from "@/lib/market";
 import { specFromParams, specToQuery, usd } from "@/lib/spec";
 
 export default async function DealsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const spec = specFromParams(await searchParams);
   const ctx = { listings: LISTINGS, table: getPremiumTable() };
 
+  // Every car of this generation and trim that's for sale, best deal first.
   const deals = LISTINGS.filter((l) => l.status === "for_sale" && l.generation === spec.generation && l.trim === spec.trim)
-    .map((l) => {
-      const matches = [
-        l.transmission === spec.transmission && l.transmission,
-        l.body === spec.body && l.body,
-        l.color === spec.color && "Your paint",
-        ...spec.options.filter((o) => l.options.includes(o)).map((o) => ctx.table.options[o]?.name),
-      ].filter(Boolean) as string[];
-      return { listing: l, score: dealScore(l, ctx), matches };
-    })
+    .map((listing) => ({
+      listing,
+      score: dealScore(listing, ctx),
+      matches: featuresMatchingSpec(listing, spec, ctx.table),
+    }))
     .sort((a, b) => b.score - a.score);
 
   return (
@@ -27,7 +25,7 @@ export default async function DealsPage({ searchParams }: { searchParams: Promis
         Best deals: {spec.generation} <span className="italic text-accent">{spec.trim}</span>
       </h1>
       <p className="mt-2 max-w-2xl text-muted">
-        Real listings from MarketCheck (pulled Oct 2026). Each car is priced against what the model expects for its exact year,
+        Real listings from MarketCheck (pulled {DATA_AS_OF}). Each car is priced against what the model expects for its exact year,
         mileage, gearbox and paint, based on every comparable listing.
       </p>
 
@@ -56,7 +54,7 @@ export default async function DealsPage({ searchParams }: { searchParams: Promis
       ) : (
         <ul className="mt-8 grid gap-4 md:grid-cols-2">
           {deals.map(({ listing: l, score, matches }) => {
-            const under = score > 0;
+            const isUnderMarket = score > 0;
             return (
               <li key={l.id} className="rounded-2xl border border-line bg-panel p-5">
                 <div className="flex items-start justify-between gap-4">
@@ -69,8 +67,8 @@ export default async function DealsPage({ searchParams }: { searchParams: Promis
                       {l.color} · {l.transmission} · {l.mileage.toLocaleString()} mi
                     </p>
                   </div>
-                  <span className={`tabular shrink-0 rounded-full px-3 py-1 text-sm ${under ? "bg-holder/15 text-holder" : "bg-pit/15 text-pit"}`}>
-                    {Math.abs(Math.round(score * 100))}% {under ? "under" : "over"}
+                  <span className={`tabular shrink-0 rounded-full px-3 py-1 text-sm ${isUnderMarket ? "bg-holder/15 text-holder" : "bg-pit/15 text-pit"}`}>
+                    {Math.abs(Math.round(score * 100))}% {isUnderMarket ? "under" : "over"}
                   </span>
                 </div>
                 <div className="tabular mt-4 flex items-baseline gap-3">
@@ -94,4 +92,17 @@ export default async function DealsPage({ searchParams }: { searchParams: Promis
       )}
     </main>
   );
+}
+
+/** Labels for the parts of a listing that match the user's spec, e.g. ["Manual", "Coupe", "Your paint", "Sport Chrono Package"]. */
+function featuresMatchingSpec(listing: Listing, spec: BuildSpec, table: PremiumTable): string[] {
+  const matches: string[] = [];
+  if (listing.transmission === spec.transmission) matches.push(listing.transmission);
+  if (listing.body === spec.body) matches.push(listing.body);
+  if (listing.color === spec.color) matches.push("Your paint");
+  for (const code of spec.options) {
+    const name = table.options[code]?.name;
+    if (listing.options.includes(code) && name) matches.push(name);
+  }
+  return matches;
 }

@@ -1,6 +1,6 @@
 import { Configurator } from "./Configurator";
 import { analyzeSpec } from "../actions";
-import { getPremiumTable } from "@/lib/market";
+import { DATA_AS_OF, getPremiumTable } from "@/lib/market";
 import { specFromParams } from "@/lib/spec";
 import { createClient } from "@/lib/supabase/server";
 
@@ -17,6 +17,7 @@ export default async function BuildPage({ searchParams }: { searchParams: Promis
       initialAnalysis={await analyzeSpec(spec)}
       optionValues={Object.values(getPremiumTable().options)}
       signedIn={!!user}
+      dataAsOf={DATA_AS_OF}
     />
   );
 }

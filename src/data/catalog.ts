@@ -100,3 +100,9 @@ export function colorDef(name: string): ColorDef | undefined {
 export function optionDef(code: string): OptionDef | undefined {
   return OPTIONS.find((o) => o.code === code);
 }
+
+/** Some options only exist on certain bodies (e.g. the sunroof is Coupe only). */
+export function optionAvailableOn(code: string, body: Body): boolean {
+  const bodies = optionDef(code)?.bodies;
+  return !bodies || bodies.includes(body);
+}

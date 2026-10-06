@@ -1,11 +1,19 @@
-import { COLORS, TRIMS } from "../src/data/catalog";
+/**
+ * Turns raw MarketCheck API listings into our Listing shape: works out the trim, generation,
+ * body, paint tier and options from the free-text fields dealers fill in.
+ */
+import { COLORS, TRIMS, optionAvailableOn } from "../src/data/catalog";
 import type { Body, ColorTier, Listing, Trim } from "../src/data/types";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+/** Special and track models we don't price (GT3, Dakar, limited editions...). */
 const EXCLUDE = /gt3|gt2|speedster|dakar|sport classic|spirit|anniversary|50 years|exclusive|heritage|^r$|s\/t/i;
 
-
+/**
+ * Reads the trim from MarketCheck's "version" text. Order matters: "Turbo S" must be checked
+ * before "Turbo", and "Carrera 4S" before "Carrera S", or the shorter name would match first.
+ */
 export function trimFor(version: string): Trim | null {
   const v = version.split("|")[0];
   if (EXCLUDE.test(v)) return null;
@@ -19,25 +27,54 @@ export function trimFor(version: string): Trim | null {
   return null;
 }
 
+// Paint names that tell us the paint tier. Checked in order: PTS, then Special, then Metallic.
 const SPECIAL = /miami|lava|python|shark|chalk|crayon|lizard|viper|ruby star|riviera|guards red.*heritage/i;
 const PTS = /paint to sample|\bpts\b|mexico blue|irish green|signal (orange|green)|voodoo|gulf blue|oslo blue|stone grey|fashion grey|frozen berry|acid green/i;
 const METALLIC = /metallic|\bneo\b|carrara white|aventurine|ice grey|night blue|dolomite|vanadium/i;
 
+function colorTierFor(lowerName: string): ColorTier {
+  if (PTS.test(lowerName)) return "PTS";
+  if (SPECIAL.test(lowerName)) return "Special";
+  if (METALLIC.test(lowerName)) return "Metallic";
+  return "Standard";
+}
+
+/**
+ * Matches a dealer's paint name to one of our catalog colors when possible.
+ * If there's no match (or the tiers disagree), keeps the dealer's name in Title Case.
+ */
 export function colorFor(raw: string | undefined): { color: string; colorTier: ColorTier } {
   const name = (raw ?? "").replace(/\s+/g, " ").trim();
   const lower = name.toLowerCase().replace(/-/g, " ");
-  const tier: ColorTier = PTS.test(lower) ? "PTS" : SPECIAL.test(lower) ? "Special" : METALLIC.test(lower) ? "Metallic" : "Standard";
-  const catalog = COLORS.find((c) => {
+  const tier = colorTierFor(lower);
+
+  const catalogColor = COLORS.find((c) => {
     const key = c.name.toLowerCase().replace(" (pts)", "");
     return lower.includes(key) || (key === "black" && lower === "black") || (key === "white" && lower === "white");
   });
-  if (catalog && (catalog.tier === tier || tier === "Standard")) return { color: catalog.name, colorTier: catalog.tier };
-  const pretty = name ? name.toLowerCase().replace(/\b\w/g, (m) => m.toUpperCase()) : "Unknown";
-  return { color: pretty, colorTier: tier };
+  // A dealer's "Standard" just means we found no tier keywords, so trust the catalog's tier then.
+  if (catalogColor && (catalogColor.tier === tier || tier === "Standard")) {
+    return { color: catalogColor.name, colorTier: catalogColor.tier };
+  }
+
+  const titleCase = name ? name.toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase()) : "Unknown";
+  return { color: titleCase, colorTier: tier };
 }
+
+function bodyFor(bodyType: string | undefined, version: string): Body {
+  if (bodyType === "Targa" || /targa/i.test(version)) return "Targa";
+  if (bodyType === "Convertible") return "Cabriolet";
+  return "Coupe";
+}
+
+/** Listings priced below this are almost always data errors or salvage cars. */
+const MIN_PLAUSIBLE_PRICE = 15000;
+/** Listings above this multiple of the base MSRP are almost always data errors or special editions. */
+const MAX_PRICE_TO_MSRP = 2.5;
 
 export type MappedListing = Omit<Listing, "options"> & { vdpUrl?: string; dom?: number };
 
+/** Returns null for any listing we can't use (missing data, excluded model, implausible price). */
 export function mapListing(l: any): MappedListing | null {
   const b = l.build ?? {};
   if (!b.year || !b.version || !l.price || l.miles == null) return null;
@@ -48,8 +85,8 @@ export function mapListing(l: any): MappedListing | null {
   const spec = TRIMS.find((t) => t.trim === trim && b.year >= t.years[0] && b.year <= t.years[1]);
   if (!spec) return null;
   const generation = spec.generation;
-  if (l.price < 15000 || l.price > spec.baseMsrp * 2.5) return null;
-  const body: Body = b.body_type === "Targa" || /targa/i.test(b.version) ? "Targa" : b.body_type === "Convertible" ? "Cabriolet" : "Coupe";
+  if (l.price < MIN_PLAUSIBLE_PRICE || l.price > spec.baseMsrp * MAX_PRICE_TO_MSRP) return null;
+  const body = bodyFor(b.body_type, b.version);
   return {
     id: l.vin ?? l.id,
     generation,
@@ -69,6 +106,7 @@ export function mapListing(l: any): MappedListing | null {
   };
 }
 
+/** Text patterns that mean a listing has an option, matched against the dealer's lowercased text. */
 const OPTION_PATTERNS: [string, RegExp][] = [
   ["SPORT_CHRONO", /sport chrono/],
   ["PCCB", /ceramic composite brake|\bpccb\b|ceramic brake/],
@@ -88,12 +126,14 @@ const OPTION_PATTERNS: [string, RegExp][] = [
   ["PTS", /paint to sample/],
 ];
 
+/** MarketCheck's own structured feature names that map directly to our option codes. */
 const OPTIONAL_FEATURES: Record<string, string> = {
   "4-Wheel Steering": "RAS",
   "Heated/Cooled Seats": "VENT_SEATS",
   "Sun/Moonroof": "SUNROOF",
 };
 
+/** Finds option codes from MarketCheck's structured features plus a text search of the dealer's description. */
 export function mapOptions(extra: any, body: Body): string[] {
   const fromFeatures = (extra.high_value_features ?? [])
     .filter((f: any) => f.type === "Optional" && OPTIONAL_FEATURES[f.description])
@@ -105,7 +145,8 @@ export function mapOptions(extra: any, body: Body): string[] {
   ]
     .join(" \n ")
     .toLowerCase();
-  const codes = new Set([...fromFeatures, ...OPTION_PATTERNS.filter(([, re]) => re.test(text)).map(([code]) => code)]);
-  if (body !== "Coupe") codes.delete("SUNROOF");
-  return [...codes];
+  const fromText = OPTION_PATTERNS.filter(([, pattern]) => pattern.test(text)).map(([code]) => code);
+
+  const codes = new Set([...fromFeatures, ...fromText]);
+  return [...codes].filter((code) => optionAvailableOn(code, body));
 }
