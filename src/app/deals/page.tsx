@@ -27,8 +27,8 @@ export default async function DealsPage({ searchParams }: { searchParams: Promis
         Best deals: {spec.generation} <span className="italic text-accent">{spec.trim}</span>
       </h1>
       <p className="mt-2 max-w-2xl text-muted">
-        Every car is priced against what the model expects for its exact year, mileage, gearbox, paint and options. Positive means
-        it is listed under market.
+        Real listings from MarketCheck (pulled Oct 2026). Each car is priced against what the model expects for its exact year,
+        mileage, gearbox and paint, based on every comparable listing.
       </p>
 
       <form className="mt-6 flex flex-wrap items-end gap-3 text-sm">
@@ -75,7 +75,12 @@ export default async function DealsPage({ searchParams }: { searchParams: Promis
                 </div>
                 <div className="tabular mt-4 flex items-baseline gap-3">
                   <span className="text-2xl">{usd(l.price)}</span>
-                  <span className="text-sm text-muted">asking</span>
+                  <span className="text-sm text-muted">asking{l.dom !== undefined && ` · ${l.dom} days listed`}</span>
+                  {l.vdpUrl && (
+                    <a href={l.vdpUrl} target="_blank" rel="noopener noreferrer" className="ml-auto text-sm text-muted underline hover:text-ink">
+                      View listing ↗
+                    </a>
+                  )}
                 </div>
                 {matches.length > 0 && (
                   <p className="mt-3 text-xs text-muted">

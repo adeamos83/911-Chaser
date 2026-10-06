@@ -7,10 +7,10 @@ import { LISTINGS, getPremiumTable } from "@/lib/market";
 import { normalizeSpec } from "@/lib/spec";
 import { createClient } from "@/lib/supabase/server";
 
-export async function analyzeSpec(input: BuildSpec) {
+export async function analyzeSpec(input: BuildSpec, mileage?: number) {
   const spec = normalizeSpec(input);
   return {
-    estimate: estimateBuild(spec, { listings: LISTINGS, table: getPremiumTable() }),
+    estimate: estimateBuild(spec, { listings: LISTINGS, table: getPremiumTable() }, mileage === undefined ? undefined : { mileage }),
     retention: retentionCurve(LISTINGS, { trim: spec.trim }),
   };
 }

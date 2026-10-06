@@ -30,6 +30,7 @@ const COLOR_TIERS: ColorTier[] = ["Standard", "Metallic", "Special", "PTS"];
 export function Configurator({ initialSpec, initialAnalysis, optionValues, signedIn }: Props) {
   const [spec, setSpec] = useState(initialSpec);
   const [analysis, setAnalysis] = useState(initialAnalysis);
+  const [mileage, setMileage] = useState<number | undefined>(undefined);
   const [pending, startTransition] = useTransition();
   const first = useRef(true);
 
@@ -39,10 +40,14 @@ export function Configurator({ initialSpec, initialAnalysis, optionValues, signe
       return;
     }
     window.history.replaceState(null, "", `/build?${specToQuery(spec)}`);
-    startTransition(async () => setAnalysis(await analyzeSpec(spec)));
-  }, [spec]);
+    const t = setTimeout(() => startTransition(async () => setAnalysis(await analyzeSpec(spec, mileage))), 120);
+    return () => clearTimeout(t);
+  }, [spec, mileage]);
 
-  const update = (patch: Partial<BuildSpec>) => setSpec((s) => normalizeSpec({ ...s, ...patch }));
+  const update = (patch: Partial<BuildSpec>) => {
+    if (patch.generation || patch.trim) setMileage(undefined);
+    setSpec((s) => normalizeSpec({ ...s, ...patch }));
+  };
   const toggleOption = (code: string) =>
     update({ options: spec.options.includes(code) ? spec.options.filter((o) => o !== code) : [...spec.options, code] });
 
@@ -129,15 +134,41 @@ export function Configurator({ initialSpec, initialAnalysis, optionValues, signe
       <section className="space-y-8">
         <div className="rounded-2xl border border-line bg-panel p-6">
           <div className="flex items-center justify-between">
-            <p className="eyebrow">Estimated market value · 15K miles</p>
+            <p className="eyebrow">Estimated asking price</p>
             {est && <ConfidencePill level={est.confidence} />}
           </div>
           {est ? (
             <>
               <p className={`tabular mt-3 font-display text-6xl transition-opacity ${pending ? "opacity-40" : ""}`}>{usd(est.mid)}</p>
               <p className="tabular mt-1 text-muted">
-                Typical range {usd(est.low)} to {usd(est.high)} · {est.sample} comparable sales &amp; listings
+                Typical range {usd(est.low)} to {usd(est.high)} at {Math.round(est.mileage / 1000)}K miles
               </p>
+              <p className="mt-1 text-xs text-muted">
+                Based on {est.sample} real {spec.generation} {spec.trim} listings (MarketCheck, Oct 2026). Typical car in this set has{" "}
+                {Math.round(est.medianMileage / 1000)}K miles.
+              </p>
+              <label className="mt-5 block">
+                <span className="flex justify-between text-xs text-muted">
+                  <span className="eyebrow">Mileage</span>
+                  <span className="tabular">
+                    {est.mileage.toLocaleString()} mi
+                    {mileage !== undefined && (
+                      <button type="button" onClick={() => setMileage(undefined)} className="ml-2 underline hover:text-ink">
+                        reset to typical
+                      </button>
+                    )}
+                  </span>
+                </span>
+                <input
+                  type="range"
+                  min={0}
+                  max={120000}
+                  step={1000}
+                  value={mileage ?? est.medianMileage}
+                  onChange={(e) => setMileage(Number(e.target.value))}
+                  className="mt-2 w-full accent-[var(--accent)]"
+                />
+              </label>
             </>
           ) : (
             <p className="mt-3 text-muted">Not enough market data for this spec.</p>
@@ -151,7 +182,14 @@ export function Configurator({ initialSpec, initialAnalysis, optionValues, signe
         </div>
 
         <div>
-          <p className="eyebrow">Options · what you get back at resale</p>
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <p className="eyebrow">Options · what you get back at resale</p>
+            <span className="rounded-full border border-neutral/60 px-2.5 py-0.5 text-xs text-neutral">Modeled, not yet measured</span>
+          </div>
+          <p className="mt-2 text-xs text-muted">
+            Payback figures come from a modeled dataset built on 911 market knowledge. Real listings rarely include a reliable
+            option sheet, so measuring this from live data is the next step.
+          </p>
           <div className="mt-3 space-y-6">
             {TIERS.map(({ tier, blurb, color }) => {
               const rows = optionValues.filter((o) => o.tier === tier && (o.code !== "SUNROOF" || spec.body === "Coupe")).sort((a, b) => b.payback - a.payback);
@@ -194,7 +232,7 @@ export function Configurator({ initialSpec, initialAnalysis, optionValues, signe
 
         <div className="rounded-2xl border border-line bg-panel p-6">
           <p className="eyebrow">Depreciation · {spec.trim}, all generations</p>
-          <p className="mt-1 text-sm text-muted">Median sale price as a share of original sticker, by age.</p>
+          <p className="mt-1 text-sm text-muted">Median asking price as a share of original sticker, by age. Real listings.</p>
           <div className="mt-4 h-56">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={analysis.retention} margin={{ top: 8, right: 8, bottom: 0, left: -12 }}>

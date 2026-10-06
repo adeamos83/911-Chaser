@@ -38,7 +38,7 @@ export default function Home() {
         <div>
           <p className="eyebrow">Leaderboard</p>
           <h2 className="mt-2 font-display text-4xl">Best value 911 right now</h2>
-          <p className="mt-2 text-sm text-muted">Horsepower per $1,000 of median market price.</p>
+          <p className="mt-2 text-sm text-muted">Horsepower per $1,000 of median asking price, from {LISTINGS.length.toLocaleString()} real listings.</p>
           <ol className="mt-6 divide-y divide-line border-y border-line">
             {leaders.map((r, i) => (
               <li key={`${r.generation}-${r.trim}`}>
@@ -59,14 +59,14 @@ export default function Home() {
         </div>
         <div className="space-y-4 self-start md:pt-16">
           <div className="rounded-2xl border border-line bg-panel p-6">
-            <p className="eyebrow">Best payback</p>
+            <p className="eyebrow">Best payback · modeled</p>
             <p className="mt-2 font-display text-3xl">{best.name}</p>
             <p className="mt-1 text-muted">
               You get back <span className="text-holder">{Math.round(best.payback * 100)}%</span> of what it cost.
             </p>
           </div>
           <div className="rounded-2xl border border-line bg-panel p-6">
-            <p className="eyebrow">Worst big-ticket option</p>
+            <p className="eyebrow">Worst big-ticket option · modeled</p>
             <p className="mt-2 font-display text-3xl">{worst.name}</p>
             <p className="mt-1 text-muted">
               ${worst.msrpCost.toLocaleString()} new, <span className="text-pit">{Math.round(worst.payback * 100)}%</span> back at resale.

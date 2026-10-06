@@ -59,7 +59,7 @@ export default async function GaragePage() {
               <p className="mt-1 text-sm text-muted">
                 {spec.generation} {spec.trim} {spec.body} · {spec.transmission} · {spec.color} · {spec.options.length} options
               </p>
-              {est && <p className="tabular mt-3 text-xl">{usd(est.mid)} <span className="text-sm text-muted">est. today</span></p>}
+              {est && <p className="tabular mt-3 text-xl">{usd(est.mid)} <span className="text-sm text-muted">typical asking at {Math.round(est.mileage / 1000)}K mi</span></p>}
               <div className="mt-auto flex items-center gap-4 pt-5 text-sm">
                 <Link href={`/build?${specToQuery(spec)}`} className="rounded-full bg-ink px-4 py-2 font-medium text-bg hover:bg-white">Open</Link>
                 <Link href={`/deals?${specToQuery(spec)}`} className="text-muted hover:text-ink">Deals</Link>
