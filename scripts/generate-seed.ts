@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { TRIMS, OPTIONS, bodiesFor, colorsFor } from "../src/data/catalog";
 import type { ColorTier, Listing, Trim } from "../src/data/types";
 
-const COUNT = 1200;
+const COUNT = 3000;
 const NOW_YEAR = 2026;
 const TODAY = Date.UTC(2026, 9, 1);
 
