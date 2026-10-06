@@ -20,6 +20,7 @@ Spec a 991 or 992 Porsche 911 and see what it trades for on the used market, whi
 
 **Prices are real.** 2,898 used 991/992 listings (Carrera through Turbo S, GT cars excluded) pulled once from the [MarketCheck API](https://www.marketcheck.com/apis/) on Oct 6, 2026. These are **asking prices** on active listings, not sold prices.
 
+- **Monthly refresh.** `.github/workflows/monthly-pull.yml` runs `scripts/pull-marketcheck.ts monthly` on the 1st of each month, capped at 400 MarketCheck calls (free tier is 500). It re-searches the market, pulls option sheets for cars that don't have one yet, rebuilds `listings.json` and saves a per-car snapshot to `data/snapshots/<YYYY-MM>.json`. Needs the `MARKETCHECK_API_KEY` repo secret.
 - `scripts/pull-marketcheck.ts` caches every raw response, so the pull never spends API calls twice. The raw cache is archived in `data/marketcheck-raw-2026-10-06.tgz`.
 - `scripts/marketcheck-map.ts` maps MarketCheck's model strings, body types and paint names onto our generations, trims and color tiers. Generation comes from each model's US model-year run (a 2025 Carrera S is a 992.1; the 992.2 S arrived for 2026), and cars outside every run, like 997s, are dropped.
 - MarketCheck's `msrp` field on used listings almost always equals the asking price, so there is no per-car window sticker. That's why the app shows price by model year and depreciation slopes rather than "% of original sticker".
