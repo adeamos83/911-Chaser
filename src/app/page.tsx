@@ -1,103 +1,79 @@
-import Image from "next/image";
+import Link from "next/link";
+import { Car911 } from "@/components/Car911";
+import { bangForBuck } from "@/lib/engine";
+import { LISTINGS, getPremiumTable } from "@/lib/market";
+import { specToQuery, normalizeSpec, usdK } from "@/lib/spec";
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const leaders = bangForBuck(LISTINGS).slice(0, 8);
+  const opts = Object.values(getPremiumTable().options).sort((a, b) => b.payback - a.payback);
+  const best = opts[0];
+  const worst = opts.filter((o) => o.msrpCost >= 5000).sort((a, b) => a.payback - b.payback)[0];
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  return (
+    <main>
+      <section className="relative overflow-hidden">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-[520px] bg-[radial-gradient(ellipse_at_50%_20%,#2a2620_0%,transparent_60%)]" />
+        <div className="relative mx-auto max-w-7xl px-5 pt-16 pb-10">
+          <p className="eyebrow rise">991 &amp; 992 · Carrera through Turbo S</p>
+          <h1 className="rise mt-4 max-w-4xl font-display text-6xl leading-[0.95] tracking-tight md:text-8xl" style={{ animationDelay: "80ms" }}>
+            Build the 911 that <em className="text-accent">holds its value.</em>
+          </h1>
+          <p className="rise mt-6 max-w-xl text-lg text-muted" style={{ animationDelay: "160ms" }}>
+            Spec your car, see what it really trades for, which options pay you back, and which ones are money down the drain.
+          </p>
+          <div className="rise mt-8 flex flex-wrap gap-3" style={{ animationDelay: "240ms" }}>
+            <Link href="/build" className="rounded-full bg-ink px-6 py-3 font-medium text-bg hover:bg-white">
+              Spec your dream 911
+            </Link>
+            <Link href="/deals" className="rounded-full border border-line px-6 py-3 hover:border-ink">
+              Browse deals
+            </Link>
+          </div>
+          <Car911 color="#1d2f6b" className="paint-cycle rise mx-auto mt-6 w-full max-w-5xl" />
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+      </section>
+
+      <section className="mx-auto grid max-w-7xl gap-10 px-5 pb-24 md:grid-cols-[1.4fr_1fr]">
+        <div>
+          <p className="eyebrow">Leaderboard</p>
+          <h2 className="mt-2 font-display text-4xl">Best value 911 right now</h2>
+          <p className="mt-2 text-sm text-muted">Horsepower per $1,000 of median market price.</p>
+          <ol className="mt-6 divide-y divide-line border-y border-line">
+            {leaders.map((r, i) => (
+              <li key={`${r.generation}-${r.trim}`}>
+                <Link
+                  href={`/build?${specToQuery(normalizeSpec({ generation: r.generation, trim: r.trim }))}`}
+                  className="grid grid-cols-[2rem_1fr_auto_auto] items-baseline gap-4 py-3 hover:bg-panel"
+                >
+                  <span className="tabular text-muted">{String(i + 1).padStart(2, "0")}</span>
+                  <span>
+                    <span className="text-muted">{r.generation}</span> {r.trim}
+                  </span>
+                  <span className="tabular text-muted">{r.hp} hp · {usdK(r.medianPrice)}</span>
+                  <span className="tabular w-20 text-right font-medium text-accent">{r.hpPerK.toFixed(2)}</span>
+                </Link>
+              </li>
+            ))}
+          </ol>
+        </div>
+        <div className="space-y-4 self-start md:pt-16">
+          <div className="rounded-2xl border border-line bg-panel p-6">
+            <p className="eyebrow">Best payback</p>
+            <p className="mt-2 font-display text-3xl">{best.name}</p>
+            <p className="mt-1 text-muted">
+              You get back <span className="text-holder">{Math.round(best.payback * 100)}%</span> of what it cost.
+            </p>
+          </div>
+          <div className="rounded-2xl border border-line bg-panel p-6">
+            <p className="eyebrow">Worst big-ticket option</p>
+            <p className="mt-2 font-display text-3xl">{worst.name}</p>
+            <p className="mt-1 text-muted">
+              ${worst.msrpCost.toLocaleString()} new, <span className="text-pit">{Math.round(worst.payback * 100)}%</span> back at resale.
+            </p>
+          </div>
+        </div>
+      </section>
+    </main>
   );
 }

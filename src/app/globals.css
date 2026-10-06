@@ -1,26 +1,70 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #0b0b0c;
+  --panel: #131315;
+  --line: #26262a;
+  --ink: #f2efea;
+  --muted: #9b968e;
+  --accent: #c9a96e;
+  --holder: #7fc79a;
+  --neutral: #d8b45a;
+  --pit: #e2685a;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-line: var(--line);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-holder: var(--holder);
+  --color-neutral: var(--neutral);
+  --color-pit: var(--pit);
+  --font-display: var(--font-serif);
+  --font-sans: var(--font-body);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  color-scheme: dark;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.eyebrow {
+  font-size: 0.7rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes paint-cycle {
+  0%, 18% { fill: #1d2f6b; }
+  25%, 43% { fill: #1fa6c9; }
+  50%, 68% { fill: #e5501e; }
+  75%, 93% { fill: #c9c6bc; }
+  100% { fill: #1d2f6b; }
+}
+
+.paint-cycle g[fill] {
+  animation: paint-cycle 14s ease-in-out infinite;
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+
+.rise {
+  animation: rise 700ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
