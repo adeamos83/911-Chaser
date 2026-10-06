@@ -2,7 +2,7 @@ import { AppShell } from "@/components/AppShell";
 import type { ColorTier } from "@/data/types";
 import { getSignedInUser } from "@/lib/garage";
 import { DATA_UPDATED_ON, getPremiumTable } from "@/lib/market";
-import { pricedAtFromParams, specFromParams } from "@/lib/spec";
+import { editBuildIdFromParams, pricedAtFromParams, specFromParams } from "@/lib/spec";
 import { analyzeSpec } from "../actions";
 import { Configurator } from "./Configurator";
 
@@ -13,6 +13,7 @@ export default async function BuildPage({ searchParams }: { searchParams: Promis
   const params = await searchParams;
   const spec = specFromParams(params);
   const pricedAt = pricedAtFromParams(params);
+  const editBuildId = editBuildIdFromParams(params);
 
   const user = await getSignedInUser();
   const initialAnalysis = await analyzeSpec(spec, pricedAt);
@@ -36,6 +37,7 @@ export default async function BuildPage({ searchParams }: { searchParams: Promis
         manualPremium={table.manual.premiumUsd}
         paintTierPremiums={paintTierPremiums}
         signedIn={!!user}
+        editBuildId={user ? editBuildId : undefined}
       />
     </AppShell>
   );

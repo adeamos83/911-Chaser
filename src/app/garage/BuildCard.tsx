@@ -4,7 +4,6 @@ import { TintedCar } from "@/components/TintedCar";
 import { OUTLINE_BUTTON, PRIMARY_BUTTON } from "@/components/ui/buttonStyles";
 import { amountColorClass, formatCount, formatShortDate, formatSignedUsd, formatUsd } from "@/lib/format";
 import { softGlowColor } from "@/lib/paint";
-import { deleteBuild } from "../actions";
 
 /** Everything one garage card shows, worked out by the page. */
 export interface BuildCardData {
@@ -31,7 +30,7 @@ export interface BuildCardData {
 const CARD_BUTTON = "flex-1 rounded-input p-[11px] text-small";
 
 /** One saved build: the car on a glow of its paint, its value, a price-by-year sparkline, and actions. */
-export function BuildCard({ build }: { build: BuildCardData }) {
+export function BuildCard({ build, onRemove }: { build: BuildCardData; onRemove: () => void }) {
   const glow = `radial-gradient(ellipse 70% 70% at 50% 70%, ${softGlowColor(build.paintHex)}, rgba(253,252,250,0) 72%)`;
   const hasOptions = build.optionCount > 0;
   const optionsText = hasOptions ? `${formatCount(build.optionCount, "option")} · ${formatSignedUsd(build.optionsValue)}` : "No options";
@@ -54,7 +53,13 @@ export function BuildCard({ build }: { build: BuildCardData }) {
           </div>
           <div className="mt-[3px] flex items-baseline justify-between gap-3">
             <div className="text-caption text-muted">{build.specLine}</div>
-            <RemoveButton buildId={build.id} />
+            <button
+              type="button"
+              onClick={onRemove}
+              className="cursor-pointer border-0 bg-transparent p-0 text-caption text-muted hover:text-negative"
+            >
+              Remove
+            </button>
           </div>
         </div>
 
@@ -83,13 +88,4 @@ function ChangeSinceAdded({ change }: { change: number | null }) {
   if (change === null) return <span className="text-muted">Saved before value tracking</span>;
   if (Math.round(change) === 0) return <span className="text-muted">No change since added</span>;
   return <span className={`font-semibold ${amountColorClass(change)}`}>{formatSignedUsd(change)} since added</span>;
-}
-
-function RemoveButton({ buildId }: { buildId: string }) {
-  return (
-    <form action={deleteBuild}>
-      <input type="hidden" name="id" value={buildId} />
-      <button className="cursor-pointer border-0 bg-transparent p-0 text-caption text-muted hover:text-negative">Remove</button>
-    </form>
-  );
 }

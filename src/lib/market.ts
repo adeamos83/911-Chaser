@@ -1,6 +1,6 @@
 import real from "@/data/listings.json";
 import modeled from "@/data/listings.modeled.json";
-import type { Listing } from "@/data/types";
+import type { BuildSpec, Listing } from "@/data/types";
 import { averageOptionContent, expectedPrice, premiumTable, type PremiumTable } from "@/lib/engine";
 import { formatDate } from "@/lib/format";
 
@@ -77,6 +77,25 @@ export function getScoredListings(): ScoredListing[] {
 
   cachedScoredListings = scored;
   return scored;
+}
+
+/** A listing asking less than our estimate. The garage and Deals both count deals this way. */
+export function isUnderEstimate(scored: ScoredListing): boolean {
+  return scored.difference < 0;
+}
+
+/** One string per generation and model, e.g. "992.1|Carrera S", for matching listings to saved builds. */
+export function modelKey(car: Pick<BuildSpec, "generation" | "trim">): string {
+  return `${car.generation}|${car.trim}`;
+}
+
+/**
+ * Listings under our estimate whose generation and model match any of these specs. Each
+ * listing is counted once, even when two saved builds share a model.
+ */
+export function dealsUnderEstimateFor(specs: Pick<BuildSpec, "generation" | "trim">[]): ScoredListing[] {
+  const wantedModels = new Set(specs.map(modelKey));
+  return getScoredListings().filter((scored) => isUnderEstimate(scored) && wantedModels.has(modelKey(scored.listing)));
 }
 
 /** "https://www.carvana.com/vehicle/1" -> "carvana.com". The dealer's site stands in for the listing source. */

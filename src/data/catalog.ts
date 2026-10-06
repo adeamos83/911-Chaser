@@ -43,18 +43,18 @@ export const OPTIONS: OptionDef[] = [
   { code: "SPORT_CHRONO", name: "Sport Chrono Package", category: "Performance", msrpCost: 2700, generations: ALL },
   { code: "PSE", name: "Sport Exhaust (PSE)", category: "Performance", msrpCost: 3000, generations: ALL },
   { code: "FRONT_LIFT", name: "Front Axle Lift", category: "Chassis", msrpCost: 2800, generations: ALL },
-  { code: "BUCKETS", name: "Full Bucket Seats", category: "Interior", msrpCost: 5900, generations: ALL },
+  { code: "BUCKETS", name: "Full Bucket Seats", category: "Interior", msrpCost: 5900, generations: ALL, excludes: ["ASS_PLUS", "VENT_SEATS"] },
   { code: "RAS", name: "Rear-Axle Steering", category: "Chassis", msrpCost: 2100, generations: ALL },
   { code: "AERO", name: "Sport Design / Aero Kit", category: "Exterior", msrpCost: 4600, generations: ALL },
   { code: "PASM_SPORT", name: "PASM Sport Suspension", category: "Chassis", msrpCost: 1500, generations: ALL },
   { code: "LED_MATRIX", name: "LED Matrix Headlights", category: "Exterior", msrpCost: 2700, generations: ALL },
-  { code: "ASS_PLUS", name: "Adaptive Sport Seats Plus", category: "Interior", msrpCost: 3400, generations: ALL },
+  { code: "ASS_PLUS", name: "Adaptive Sport Seats Plus", category: "Interior", msrpCost: 3400, generations: ALL, excludes: ["BUCKETS"] },
   { code: "SUNROOF", name: "Sunroof", category: "Exterior", msrpCost: 1900, generations: ALL, bodies: ["Coupe"] },
   { code: "PCCB", name: "PCCB Ceramic Brakes", category: "Performance", msrpCost: 9100, generations: ALL },
   { code: "BURMESTER", name: "Burmester Audio", category: "Tech", msrpCost: 5800, generations: ALL },
   { code: "LEATHER_PKG", name: "Extended Leather Package", category: "Interior", msrpCost: 4500, generations: ALL },
   { code: "COLOR_BELTS", name: "Colored Seatbelts", category: "Interior", msrpCost: 500, generations: ALL },
-  { code: "VENT_SEATS", name: "Ventilated Seats", category: "Interior", msrpCost: 1000, generations: ALL },
+  { code: "VENT_SEATS", name: "Ventilated Seats", category: "Interior", msrpCost: 1000, generations: ALL, excludes: ["BUCKETS"] },
 ];
 
 // Hex values match the 911 Chaser design palette, tuned so the tinted car photo reads correctly.
@@ -101,6 +101,11 @@ export function colorDef(name: string): ColorDef | undefined {
 
 export function optionDef(code: string): OptionDef | undefined {
   return OPTIONS.find((option) => option.code === code);
+}
+
+/** True when two options can't be on the same car, e.g. full bucket seats and ventilated seats. */
+export function optionsConflict(firstCode: string, secondCode: string): boolean {
+  return !!optionDef(firstCode)?.excludes?.includes(secondCode) || !!optionDef(secondCode)?.excludes?.includes(firstCode);
 }
 
 /** Some options only exist on certain bodies (e.g. the sunroof is Coupe only). */

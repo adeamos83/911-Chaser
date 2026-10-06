@@ -1,4 +1,4 @@
-import { GENERATIONS, OPTIONS, bodiesFor, colorDef, colorsFor, optionAvailableOn, trimSpec, trimsFor } from "@/data/catalog";
+import { GENERATIONS, OPTIONS, bodiesFor, colorDef, colorsFor, optionAvailableOn, optionsConflict, trimSpec, trimsFor } from "@/data/catalog";
 import type { BuildSpec, Generation, Trim } from "@/data/types";
 
 /** The build shown when the page opens with no spec in the URL. */
@@ -36,10 +36,22 @@ export function normalizeSpec(input: Partial<BuildSpec>): BuildSpec {
   const requested = input.options ?? [];
   const options = OPTIONS.filter((option) => {
     if (option.code === "PTS") return isPaintToSample;
-    return optionAvailableOn(option.code, body) && requested.includes(option.code);
+    return optionAvailableOn(option.code, body) && wasRequestedAndNotReplaced(option.code, requested);
   }).map((option) => option.code);
 
   return { generation, trim, body, transmission, color, options };
+}
+
+/**
+ * True when `code` is in the requested options and no option requested after it conflicts
+ * with it. The configurator adds each new pick to the end of the list, so the latest pick wins.
+ * Example: ["BUCKETS", "VENT_SEATS"] keeps VENT_SEATS and drops BUCKETS.
+ */
+function wasRequestedAndNotReplaced(code: string, requested: string[]): boolean {
+  const position = requested.lastIndexOf(code);
+  if (position === -1) return false;
+  const pickedAfter = requested.slice(position + 1);
+  return !pickedAfter.some((laterCode) => optionsConflict(code, laterCode));
 }
 
 /** Keep the requested trim if this generation has it; otherwise prefer Carrera S, then the first trim. */
@@ -94,12 +106,23 @@ export interface PricedAt {
   mileage?: number;
 }
 
-/** Link to the configurator with this spec (and optionally a model year and mileage) preselected. */
-export function configuratorLink(spec: BuildSpec, pricedAt: PricedAt = {}): string {
+/**
+ * Link to the configurator with this spec (and optionally a model year and mileage) preselected.
+ * Pass a saved build's id to edit that build instead of starting a new one.
+ */
+export function configuratorLink(spec: BuildSpec, pricedAt: PricedAt = {}, editBuildId?: string): string {
   const params = new URLSearchParams(specToQuery(spec));
   if (pricedAt.modelYear !== undefined) params.set("y", String(pricedAt.modelYear));
   if (pricedAt.mileage !== undefined) params.set("m", String(Math.round(pricedAt.mileage)));
+  if (editBuildId) params.set("edit", editBuildId);
   return `/build?${params.toString()}`;
+}
+
+/** The saved build being edited (the "edit" key in the configurator URL), if any. */
+export function editBuildIdFromParams(params: Record<string, string | string[] | undefined>): string | undefined {
+  const value = params.edit;
+  const id = Array.isArray(value) ? value[0] : value;
+  return id || undefined;
 }
 
 /** Reads the model year (y) and mileage (m) from the configurator URL. Missing or invalid values are left undefined. */

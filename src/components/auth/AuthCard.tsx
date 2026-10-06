@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { startTransition, useActionState, useId, useState } from "react";
 import { authenticate, type AuthState } from "@/app/login/actions";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { OUTLINE_BUTTON, PRIMARY_BUTTON } from "@/components/ui/buttonStyles";
@@ -36,6 +36,7 @@ const TAB_COPY = {
 
 const INPUT_CLASSES =
   "w-full rounded-input border border-line bg-card px-3.5 py-[13px] text-[14px] text-ink outline-none placeholder:text-muted focus:border-ink";
+const LABEL_CLASSES = "mb-1 block text-caption font-medium text-body";
 
 interface AuthCardProps {
   tab: AuthTab;
@@ -52,11 +53,19 @@ export function AuthCard({ tab, onTabChange, next }: AuthCardProps) {
   const copy = TAB_COPY[tab];
   const isSignup = tab === "signup";
   const otherTab: AuthTab = isSignup ? "login" : "signup";
+  const fieldId = useId();
 
-  const fillDemoAccount = () => {
+  // Logs straight in, rather than just filling the form and leaving the visitor to press Log in.
+  const logInWithDemoAccount = () => {
     onTabChange("login");
     setEmail(DEMO_ACCOUNT.email);
     setPassword(DEMO_ACCOUNT.password);
+    const formData = new FormData();
+    formData.set("mode", "login");
+    if (next) formData.set("next", next);
+    formData.set("email", DEMO_ACCOUNT.email);
+    formData.set("password", DEMO_ACCOUNT.password);
+    startTransition(() => formAction(formData));
   };
 
   return (
@@ -69,28 +78,47 @@ export function AuthCard({ tab, onTabChange, next }: AuthCardProps) {
       <form action={formAction} className="mt-5 flex flex-col gap-2.5">
         <input type="hidden" name="mode" value={tab} />
         {next && <input type="hidden" name="next" value={next} />}
-        {isSignup && <input name="fullName" placeholder="Full name" autoComplete="name" className={INPUT_CLASSES} />}
-        <input
-          name="email"
-          type="email"
-          placeholder="Email"
-          required
-          autoComplete="email"
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          className={INPUT_CLASSES}
-        />
-        <input
-          name="password"
-          type="password"
-          placeholder="Password"
-          required
-          minLength={MIN_PASSWORD_LENGTH}
-          autoComplete={isSignup ? "new-password" : "current-password"}
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          className={INPUT_CLASSES}
-        />
+        {isSignup && (
+          <div>
+            <label htmlFor={`${fieldId}-name`} className={LABEL_CLASSES}>
+              Full name
+            </label>
+            <input id={`${fieldId}-name`} name="fullName" placeholder="Jane Driver" autoComplete="name" className={INPUT_CLASSES} />
+          </div>
+        )}
+        <div>
+          <label htmlFor={`${fieldId}-email`} className={LABEL_CLASSES}>
+            Email
+          </label>
+          <input
+            id={`${fieldId}-email`}
+            name="email"
+            type="email"
+            placeholder="you@example.com"
+            required
+            autoComplete="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            className={INPUT_CLASSES}
+          />
+        </div>
+        <div>
+          <label htmlFor={`${fieldId}-password`} className={LABEL_CLASSES}>
+            Password
+          </label>
+          <input
+            id={`${fieldId}-password`}
+            name="password"
+            type="password"
+            placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`}
+            required
+            minLength={MIN_PASSWORD_LENGTH}
+            autoComplete={isSignup ? "new-password" : "current-password"}
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            className={INPUT_CLASSES}
+          />
+        </div>
         {state.error && <p className="text-caption text-negative">{state.error}</p>}
         <button disabled={pending} className={`${PRIMARY_BUTTON} mt-1 cursor-pointer rounded-input border-0 p-3.5 text-[14px]`}>
           {pending ? "One moment…" : copy.submit}
@@ -102,7 +130,12 @@ export function AuthCard({ tab, onTabChange, next }: AuthCardProps) {
         or
         <span className="h-px flex-1 bg-ink/10" />
       </div>
-      <button type="button" onClick={fillDemoAccount} className={`${OUTLINE_BUTTON} w-full cursor-pointer rounded-input p-3 text-small`}>
+      <button
+        type="button"
+        onClick={logInWithDemoAccount}
+        disabled={pending}
+        className={`${OUTLINE_BUTTON} w-full cursor-pointer rounded-input p-3 text-small`}
+      >
         Try the demo account
       </button>
 

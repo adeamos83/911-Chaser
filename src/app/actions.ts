@@ -39,6 +39,20 @@ export async function analyzeSpec(input: BuildSpec, pricedAt: PricedAt = {}) {
 }
 
 /**
+ * Prices a build on the server, so the saved value can't be tampered with, and returns
+ * what goes in the `spec` column: the spec plus the year, mileage and value it was priced at.
+ */
+async function priceForSaving(input: BuildSpec, pricedAt: PricedAt): Promise<StoredBuildSpec> {
+  const analysis = await analyzeSpec(input, pricedAt);
+  return {
+    ...analysis.spec,
+    modelYear: analysis.estimate?.modelYear,
+    mileage: analysis.estimate?.mileage,
+    savedValue: analysis.estimate?.mid,
+  };
+}
+
+/**
  * Saves a build to the signed-in user's garage, along with today's estimate so the garage
  * can later show how far its value has moved. Returns the new id, or an error message.
  */
@@ -49,19 +63,11 @@ export async function saveBuild(input: BuildSpec, pricedAt: PricedAt): Promise<{
   } = await supabase.auth.getUser();
   if (!user) return { error: "Log in to save builds." };
 
-  // Price the build on the server, so the saved value can't be tampered with.
-  const analysis = await analyzeSpec(input, pricedAt);
-  const storedSpec: StoredBuildSpec = {
-    ...analysis.spec,
-    modelYear: analysis.estimate?.modelYear,
-    mileage: analysis.estimate?.mileage,
-    savedValue: analysis.estimate?.mid,
-  };
-  const name = defaultBuildName(analysis.spec).slice(0, MAX_BUILD_NAME_LENGTH);
-
+  const spec = await priceForSaving(input, pricedAt);
+  const name = defaultBuildName(spec).slice(0, MAX_BUILD_NAME_LENGTH);
   const { data, error } = await supabase
     .from("builds")
-    .insert({ user_id: user.id, name, spec: storedSpec })
+    .insert({ user_id: user.id, name, spec })
     .select("id")
     .single();
   if (error) return { error: error.message };
@@ -69,9 +75,29 @@ export async function saveBuild(input: BuildSpec, pricedAt: PricedAt): Promise<{
   return { id: data.id };
 }
 
-/** Deletes a saved build (form action from the garage page). */
-export async function deleteBuild(formData: FormData) {
-  const id = String(formData.get("id"));
+/**
+ * Replaces a saved build's spec, keeping its id, name and the day it was added. The value it
+ * tracks against becomes today's estimate for the new spec, since the old one priced a different car.
+ */
+export async function updateBuild(id: string, input: BuildSpec, pricedAt: PricedAt): Promise<{ error?: string; id?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Log in to save builds." };
+
+  // Only the spec changes. The name may have been set by hand, so it stays.
+  const spec = await priceForSaving(input, pricedAt);
+  const { data, error } = await supabase.from("builds").update({ spec }).eq("id", id).select("id");
+  if (error) return { error: error.message };
+  // No rows back means the build was deleted (or isn't this user's), so nothing was updated.
+  if (!data || data.length === 0) return { error: "That build is no longer in your garage." };
+  revalidatePath("/garage");
+  return { id };
+}
+
+/** Deletes a saved build. The garage calls this once the undo window has passed. */
+export async function deleteBuild(id: string) {
   const supabase = await createClient();
   await supabase.from("builds").delete().eq("id", id);
   revalidatePath("/garage");

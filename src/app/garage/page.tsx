@@ -5,10 +5,11 @@ import { PageTitle } from "@/components/PageTitle";
 import { estimateBuild, priceByYear } from "@/lib/engine";
 import { amountColorClass, formatCount, formatMiles, formatSignedUsd, formatUsd } from "@/lib/format";
 import { getSignedInUser, loadSavedBuilds, type SavedBuild } from "@/lib/garage";
-import { DATA_UPDATED_ON, LISTINGS, getPremiumTable, getScoredListings } from "@/lib/market";
+import { DATA_UPDATED_ON, LISTINGS, dealsUnderEstimateFor, getPremiumTable } from "@/lib/market";
 import { paintHexFor } from "@/lib/paint";
 import { configuratorLink, dealsLink } from "@/lib/spec";
-import { BuildCard, type BuildCardData } from "./BuildCard";
+import type { BuildCardData } from "./BuildCard";
+import { GarageCards } from "./GarageCards";
 
 /** The signed-in user's saved builds, with combined stats on top and one card per build. */
 export default async function GaragePage() {
@@ -24,7 +25,8 @@ export default async function GaragePage() {
   const anyBuildTracked = cards.some((card) => card.changeSinceAdded !== null);
   const changeText = anyBuildTracked ? formatSignedUsd(combinedChange) : "—";
   const changeColor = anyBuildTracked ? amountColorClass(combinedChange) : "text-muted";
-  const combinedDeals = sumOf(cards.map((card) => card.dealsUnderMarket));
+  // Two builds of the same model match the same listings, so count each listing once.
+  const combinedDeals = dealsUnderEstimateFor(builds.map((build) => build.spec)).length;
   const headline = cards.length === 0 ? "No dream builds yet" : formatCount(cards.length, "dream build");
 
   return (
@@ -46,10 +48,9 @@ export default async function GaragePage() {
       {error && <p className="px-5 pt-4 text-small text-negative sm:px-9">Couldn&apos;t load your builds: {error}</p>}
 
       <div className="grid grid-cols-[repeat(auto-fill,minmax(min(360px,100%),1fr))] gap-5 px-5 pt-[30px] pb-9 sm:px-9">
-        {cards.map((card) => (
-          <BuildCard key={card.id} build={card} />
-        ))}
-        <NewBuildCard />
+        <GarageCards cards={cards}>
+          <NewBuildCard />
+        </GarageCards>
       </div>
     </AppShell>
   );
@@ -89,18 +90,10 @@ function cardDataFor(build: SavedBuild): BuildCardData {
     optionCount: build.spec.options.length,
     optionsValue: estimate?.breakdown.options ?? 0,
     pricesByYear: yearPoints.map((point) => point.medianPrice),
-    dealsUnderMarket: countDealsUnderMarket(build),
-    editHref: configuratorLink(build.spec, pricedAt),
+    dealsUnderMarket: dealsUnderEstimateFor([build.spec]).length,
+    editHref: configuratorLink(build.spec, pricedAt, build.id),
     dealsHref: dealsLink(build.spec),
   };
-}
-
-/** How many cars of this generation and model are for sale under our estimate right now. */
-function countDealsUnderMarket(build: SavedBuild): number {
-  const sameModel = getScoredListings().filter(
-    (scored) => scored.listing.generation === build.spec.generation && scored.listing.trim === build.spec.trim,
-  );
-  return sameModel.filter((scored) => scored.difference < 0).length;
 }
 
 function sumOf(numbers: number[]): number {

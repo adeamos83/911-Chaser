@@ -40,7 +40,7 @@ export function ListingRow({ row }: { row: ListingRowData }) {
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="text-[16px] font-semibold">{title}</h2>
           {row.inGarage && (
-            <span className="rounded-pill bg-accent/10 px-2 py-[3px] text-micro font-semibold text-accent">In your garage</span>
+            <span className="rounded-pill bg-accent/10 px-2 py-[3px] text-micro font-semibold text-accent">Your garage model</span>
           )}
         </div>
         <div className="mt-1 text-small text-muted">

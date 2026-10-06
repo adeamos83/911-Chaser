@@ -63,8 +63,8 @@ export function HomeTop({ memberEmail, sourceLine }: HomeTopProps) {
             Chase the 911 you want.
           </h1>
           <p className="mt-[22px] max-w-[520px] text-[17px] leading-normal text-body text-pretty">
-            Build the exact 911 you dream about, down to the paint and options. See what it really sells for, and spot the
-            ones listed under the market before anyone else does.
+            Build the exact 911 you dream about, down to the paint and options. See what dealers are asking, what we
+            estimate it&apos;s worth, and spot the ones listed under that estimate before anyone else does.
           </p>
           <div className="mt-[22px]">
             <StatusDot>{sourceLine}</StatusDot>

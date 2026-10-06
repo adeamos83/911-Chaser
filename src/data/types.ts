@@ -30,6 +30,8 @@ export interface OptionDef {
   generations: Generation[];
   /** Coupe-only options (e.g. sunroof). */
   bodies?: Body[];
+  /** Options that can't be fitted alongside this one (e.g. two kinds of seat). Picking one drops the others. */
+  excludes?: string[];
 }
 
 export interface ColorDef {

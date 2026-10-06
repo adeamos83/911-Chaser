@@ -1,4 +1,4 @@
-import { optionAvailableOn } from "@/data/catalog";
+import { OPTIONS, optionAvailableOn, optionsConflict } from "@/data/catalog";
 import type { Body } from "@/data/types";
 import type { OptionValue } from "@/lib/engine";
 import { SectionHeader } from "@/components/ui/SectionHeader";
@@ -57,7 +57,9 @@ function OptionChip({ option, selected, onToggle }: OptionChipProps) {
   const colorClasses = selected ? "border-ink bg-ink text-inverse" : "border-line bg-surface text-ink hover:border-muted";
   const deltaColor = selected ? "text-inverse/70" : "text-muted";
   const paybackPercent = Math.round(option.payback * 100);
-  const tooltip = `Gets back about ${paybackPercent}% of its ${formatUsd(option.msrpCost)} cost at resale`;
+  const conflicts = OPTIONS.filter((other) => optionsConflict(option.code, other.code)).map((other) => other.name);
+  const conflictNote = conflicts.length > 0 ? `. Replaces ${conflicts.join(" and ")}` : "";
+  const tooltip = `Gets back about ${paybackPercent}% of its ${formatUsd(option.msrpCost)} cost at resale${conflictNote}`;
 
   return (
     <button

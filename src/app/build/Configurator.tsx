@@ -33,6 +33,8 @@ interface ConfiguratorProps {
   /** What each paint tier adds at resale, for the paint header. */
   paintTierPremiums: Record<ColorTier, number>;
   signedIn: boolean;
+  /** Set when editing a saved build, so saving updates it instead of adding a new one. */
+  editBuildId?: string;
 }
 
 /**
@@ -48,6 +50,7 @@ export function Configurator({
   manualPremium,
   paintTierPremiums,
   signedIn,
+  editBuildId,
 }: ConfiguratorProps) {
   const [spec, setSpec] = useState(initialSpec);
   /** Model year and mileage the user picked. Undefined means "use the typical one for this model". */
@@ -170,6 +173,7 @@ export function Configurator({
         spec={spec}
         pricedAt={pricedAt}
         signedIn={signedIn}
+        editBuildId={editBuildId}
       />
     </div>
   );

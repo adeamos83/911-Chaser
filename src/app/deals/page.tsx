@@ -7,7 +7,7 @@ import { Pill } from "@/components/ui/Pill";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { formatCount } from "@/lib/format";
 import { getSignedInUser, loadSavedBuilds } from "@/lib/garage";
-import { DATA_UPDATED_ON, getPremiumTable, getScoredListings, listingSourceName, type ScoredListing } from "@/lib/market";
+import { DATA_UPDATED_ON, getPremiumTable, getScoredListings, isUnderEstimate, listingSourceName, modelKey, type ScoredListing } from "@/lib/market";
 import { paintHexFor } from "@/lib/paint";
 import { ALL_MODELS, ROWS_PER_PAGE, dealsHref, readFilters, type DealFilters, type SortKey } from "./filters";
 import { ListingRow, type ListingRowData } from "./ListingRow";
@@ -26,14 +26,14 @@ export default async function DealsPage({ searchParams }: { searchParams: Promis
   const { builds } = user ? await loadSavedBuilds() : { builds: [] };
 
   // "992.1|Carrera S" for every model in the user's garage.
-  const garageModels = new Set(builds.map((build) => `${build.spec.generation}|${build.spec.trim}`));
-  const isInGarage = (scored: ScoredListing) => garageModels.has(`${scored.listing.generation}|${scored.listing.trim}`);
+  const garageModels = new Set(builds.map((build) => modelKey(build.spec)));
+  const isInGarage = (scored: ScoredListing) => garageModels.has(modelKey(scored.listing));
 
   const allListings = getScoredListings();
   const matching = allListings.filter((scored) => matchesFilters(scored, filters, isInGarage));
   const sorted = sortListings(matching, filters.sort);
   const shownListings = sorted.slice(0, filters.limit);
-  const underEstimateCount = matching.filter((scored) => scored.difference <= 0).length;
+  const underEstimateCount = matching.filter(isUnderEstimate).length;
   const hiddenCount = sorted.length - shownListings.length;
   const nextPageCount = Math.min(ROWS_PER_PAGE, hiddenCount);
 

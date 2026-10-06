@@ -25,10 +25,11 @@ interface ValueRailProps {
   spec: BuildSpec;
   pricedAt: PricedAt;
   signedIn: boolean;
+  editBuildId?: string;
 }
 
 /** The right-hand card: estimated value, chart, line-by-line breakdown, typical range, and save. */
-export function ValueRail({ analysis, pending, chartMode, onChartModeChange, paintHex, spec, pricedAt, signedIn }: ValueRailProps) {
+export function ValueRail({ analysis, pending, chartMode, onChartModeChange, paintHex, spec, pricedAt, signedIn, editBuildId }: ValueRailProps) {
   const estimate = analysis.estimate;
   const fadeClass = pending ? "opacity-50" : "opacity-100";
 
@@ -59,7 +60,7 @@ export function ValueRail({ analysis, pending, chartMode, onChartModeChange, pai
           <p className="mt-3 text-small text-muted">Not enough market data for this spec yet. Try another model or generation.</p>
         </div>
       )}
-      <SaveToGarageButton spec={spec} pricedAt={pricedAt} signedIn={signedIn} />
+      <SaveToGarageButton spec={spec} pricedAt={pricedAt} signedIn={signedIn} editBuildId={editBuildId} />
     </aside>
   );
 }
