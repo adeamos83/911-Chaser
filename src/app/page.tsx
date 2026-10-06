@@ -16,7 +16,7 @@ export default function Home() {
         <div className="pointer-events-none absolute inset-x-0 top-0 h-[520px] bg-[radial-gradient(ellipse_at_50%_20%,#2a2620_0%,transparent_60%)]" />
         <div className="relative mx-auto max-w-7xl px-5 pt-16 pb-10">
           <p className="eyebrow rise">991 &amp; 992 · Carrera through Turbo S</p>
-          <h1 className="rise mt-4 max-w-4xl font-display text-6xl leading-[0.95] tracking-tight md:text-8xl" style={{ animationDelay: "80ms" }}>
+          <h1 className="rise mt-4 max-w-5xl font-display text-6xl leading-[0.95] tracking-tight md:text-8xl" style={{ animationDelay: "80ms" }}>
             Build the 911 that <em className="text-accent">holds its value.</em>
           </h1>
           <p className="rise mt-6 max-w-xl text-lg text-muted" style={{ animationDelay: "160ms" }}>

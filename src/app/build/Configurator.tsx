@@ -51,7 +51,7 @@ export function Configurator({ initialSpec, initialAnalysis, optionValues, signe
   const est = analysis.estimate;
 
   return (
-    <main className="mx-auto grid max-w-7xl gap-10 px-5 py-10 lg:grid-cols-[1.15fr_1fr]" style={{ ["--accent" as string]: paint.hex === "#141416" || paint.hex === "#1E1F22" ? "#c9a96e" : paint.hex }}>
+    <main className="mx-auto grid max-w-7xl gap-10 px-5 py-10 lg:grid-cols-[1.15fr_1fr]" style={{ ["--accent" as string]: `color-mix(in oklab, ${paint.hex} 65%, #f2efea)` }}>
       <section className="lg:sticky lg:top-20 lg:self-start">
         <p className="eyebrow">Configurator</p>
         <h1 className="mt-2 font-display text-5xl leading-none">
@@ -205,7 +205,7 @@ export function Configurator({ initialSpec, initialAnalysis, optionValues, signe
                   formatter={(v) => [`${Math.round(Number(v) * 100)}% of MSRP`, "Retained"]}
                   labelFormatter={(a) => `${a} years old`}
                 />
-                <Line type="monotone" dataKey="retention" stroke="var(--accent)" strokeWidth={2.5} dot={{ r: 3 }} />
+                <Line type="monotone" dataKey="retention" stroke="var(--accent)" strokeWidth={2.5} dot={{ r: 3 }} isAnimationActive={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>
