@@ -7,13 +7,6 @@ import { formatDate } from "@/lib/format";
 /** Real asking prices pulled from MarketCheck (see scripts/pull-marketcheck.ts). */
 export const LISTINGS = real as Listing[];
 
-/**
- * Month the listing data is current to, e.g. "Oct 2026". Read from the newest listing date,
- * so it updates by itself whenever listings.json is refreshed.
- * Server only: importing this file in the browser would ship every listing to the visitor.
- */
-export const DATA_AS_OF = formatMonth(newestListingDate(LISTINGS));
-
 /** Day the listing data is current to, e.g. "Oct 6, 2026". */
 export const DATA_UPDATED_ON = formatUpdatedDay(newestListingDate(LISTINGS));
 
@@ -24,15 +17,6 @@ function newestListingDate(listings: Listing[]): string {
     if (listing.date > newest) newest = listing.date;
   }
   return newest;
-}
-
-/** "2026-10-03" -> "Oct 2026" */
-function formatMonth(isoDate: string): string {
-  if (!isoDate) return "date unknown";
-  const dayOnly = isoDate.slice(0, 10);
-  // UTC on both sides so the server and the browser always print the same month.
-  const date = new Date(`${dayOnly}T00:00:00Z`);
-  return date.toLocaleString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
 }
 
 /** "2026-10-03" -> "Oct 3, 2026" */

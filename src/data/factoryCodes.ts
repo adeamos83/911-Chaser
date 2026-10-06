@@ -13,14 +13,12 @@
  */
 import type { Generation } from "./types";
 
-/** Where the codes came from. */
-export const FACTORY_CODE_SOURCES = {
-  list991_1: "http://plenums.blogspot.com/2017/01/porsche-911-9911-option-codes-my-2012.html",
-  list991_2: "https://www.carrerafever.net/porsche-911-991-2-option-codes-my2017/",
-  list992_1: "https://www.carrerafever.net/porsche-911-992-1-option-codes-my2021/",
-  configurator992_2: "https://configurator.porsche.com/en-QA/mode/model/9921S2",
-  type911: "https://type911shop.co.uk/Porsche-Option-Codes",
-};
+// Where the codes came from:
+//   991.1: http://plenums.blogspot.com/2017/01/porsche-911-9911-option-codes-my-2012.html
+//   991.2: https://www.carrerafever.net/porsche-911-991-2-option-codes-my2017/
+//   992.1: https://www.carrerafever.net/porsche-911-992-1-option-codes-my2021/
+//   992.2: https://configurator.porsche.com/en-QA/mode/model/9921S2
+//   All:   https://type911shop.co.uk/Porsche-Option-Codes
 
 export interface FactoryCodeRow {
   /** Our option code, matching OPTIONS in catalog.ts. */

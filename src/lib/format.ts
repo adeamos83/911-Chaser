@@ -15,13 +15,6 @@ export function formatSignedUsd(amount: number): string {
   return `${sign}${formatUsd(Math.abs(amount))}`;
 }
 
-/** 0.0734 -> "+7.3%", -0.0734 -> "−7.3%" */
-export function formatSignedPercent(fraction: number): string {
-  const sign = fraction < 0 ? MINUS_SIGN : "+";
-  const percent = Math.abs(fraction * 100).toFixed(1);
-  return `${sign}${percent}%`;
-}
-
 /** 9800 -> "9,800 mi" */
 export function formatMiles(miles: number): string {
   const rounded = Math.round(miles);
