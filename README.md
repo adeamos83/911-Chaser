@@ -3,7 +3,7 @@
 Spec a 991 or 992 Porsche 911 and see what it trades for on the used market, which options pay you back at resale, and which listings are priced under market.
 
 **Live:** https://dream-911-chaser.vercel.app
-**Demo login:** `demo@dream911chaser.com` / `FlatSix911!` (or create your own account, no email confirmation)
+**Demo login:** `demo@dream911chaser.com` / `FlatSix911!`, or click "Use demo account" on the sign-in page. New accounts work too (no email confirmation).
 
 ## Works
 
