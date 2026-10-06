@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
-import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Line, LineChart, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { BODIES, GENERATIONS, bodiesFor, colorDef, colorsFor, trimSpec, trimsFor } from "@/data/catalog";
 import type { BuildSpec, ColorTier } from "@/data/types";
 import { Car911 } from "@/components/Car911";
@@ -232,18 +232,21 @@ export function Configurator({ initialSpec, initialAnalysis, optionValues, signe
 
         <div className="rounded-2xl border border-line bg-panel p-6">
           <p className="eyebrow">Depreciation · {spec.trim}, all generations</p>
-          <p className="mt-1 text-sm text-muted">Median asking price as a share of original sticker, by age. Real listings.</p>
+          <p className="mt-1 text-sm text-muted">
+            Median asking price by model year, from real listings. Shaded: the {spec.generation} years.
+          </p>
           <div className="mt-4 h-56">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={analysis.retention} margin={{ top: 8, right: 8, bottom: 0, left: -12 }}>
-                <XAxis dataKey="age" stroke="#6b675f" tickLine={false} fontSize={12} tickFormatter={(a) => `${a}y`} />
-                <YAxis stroke="#6b675f" tickLine={false} fontSize={12} domain={[0.3, 1]} tickFormatter={(v) => `${Math.round(v * 100)}%`} />
+              <LineChart data={analysis.priceByYear} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+                <ReferenceArea x1={trim.years[0]} x2={trim.years[1]} fill="var(--accent)" fillOpacity={0.12} ifOverflow="extendDomain" />
+                <XAxis dataKey="year" type="number" domain={["dataMin", "dataMax"]} allowDecimals={false} stroke="#6b675f" tickLine={false} fontSize={12} />
+                <YAxis stroke="#6b675f" tickLine={false} fontSize={12} width={48} domain={["auto", "auto"]} tickFormatter={(v) => usdK(v)} />
                 <Tooltip
                   contentStyle={{ background: "#131315", border: "1px solid #26262a", borderRadius: 8 }}
-                  formatter={(v) => [`${Math.round(Number(v) * 100)}% of MSRP`, "Retained"]}
-                  labelFormatter={(a) => `${a} years old`}
+                  formatter={(v, _n, item) => [`${usd(Number(v))} median · ${item.payload.sample} listings`, "Asking"]}
+                  labelFormatter={(y) => `${y} model year`}
                 />
-                <Line type="monotone" dataKey="retention" stroke="var(--accent)" strokeWidth={2.5} dot={{ r: 3 }} isAnimationActive={false} />
+                <Line type="monotone" dataKey="medianPrice" stroke="var(--accent)" strokeWidth={2.5} dot={{ r: 3 }} isAnimationActive={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>

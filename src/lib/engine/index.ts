@@ -227,6 +227,24 @@ export function retentionCurve(listings: Listing[], key: { generation?: Generati
     .sort((a, b) => a.age - b.age);
 }
 
+export interface YearPoint {
+  year: number;
+  medianPrice: number;
+  sample: number;
+}
+
+/** Median asking price by model year for a trim across generations. Independent of MSRP data. */
+export function priceByYear(listings: Listing[], trim: Trim, minSample = 3): YearPoint[] {
+  const byYear = new Map<number, number[]>();
+  for (const l of listings) {
+    if (l.trim === trim) byYear.set(l.modelYear, [...(byYear.get(l.modelYear) ?? []), l.price]);
+  }
+  return [...byYear.entries()]
+    .filter(([, xs]) => xs.length >= minSample)
+    .map(([year, xs]) => ({ year, medianPrice: median(xs), sample: xs.length }))
+    .sort((a, b) => a.year - b.year);
+}
+
 // ---------- 7. estimate ----------
 
 export interface Estimate {

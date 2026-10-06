@@ -51,10 +51,10 @@ export function mapListing(l: any): MappedListing | null {
   if (!trim) return null;
   const generation = generationFor(b.year);
   const spec = trimSpec(generation, trim);
-  if (!spec) return null;
+  // Drops cars from the wrong generation, e.g. a 2013 Turbo S is a 997, not a 991.
+  if (!spec || b.year < spec.years[0] || b.year > spec.years[1]) return null;
   if (l.price < 15000 || l.price > spec.baseMsrp * 2.5) return null;
   const body: Body = b.body_type === "Targa" || /targa/i.test(b.version) ? "Targa" : b.body_type === "Convertible" ? "Cabriolet" : "Coupe";
-  const msrp = l.msrp && l.msrp > spec.baseMsrp * 0.8 && l.msrp < spec.baseMsrp * 2.5 ? l.msrp : spec.baseMsrp;
   return {
     id: l.vin ?? l.id,
     generation,
@@ -64,7 +64,8 @@ export function mapListing(l: any): MappedListing | null {
     transmission: b.transmission === "Manual" ? "Manual" : "PDK",
     ...colorFor(l.exterior_color ?? l.base_ext_color),
     mileage: l.miles,
-    originalMsrp: msrp,
+    // MarketCheck's msrp on used listings is usually the asking price, so use the base sticker instead.
+    originalMsrp: spec.baseMsrp,
     price: l.price,
     status: "for_sale",
     date: (l.first_seen_at_date ?? "").slice(0, 10),

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import type { BuildSpec } from "@/data/types";
-import { estimateBuild, retentionCurve } from "@/lib/engine";
+import { estimateBuild, priceByYear } from "@/lib/engine";
 import { LISTINGS, getPremiumTable } from "@/lib/market";
 import { normalizeSpec } from "@/lib/spec";
 import { createClient } from "@/lib/supabase/server";
@@ -11,7 +11,7 @@ export async function analyzeSpec(input: BuildSpec, mileage?: number) {
   const spec = normalizeSpec(input);
   return {
     estimate: estimateBuild(spec, { listings: LISTINGS, table: getPremiumTable() }, mileage === undefined ? undefined : { mileage }),
-    retention: retentionCurve(LISTINGS, { trim: spec.trim }),
+    priceByYear: priceByYear(LISTINGS, spec.trim),
   };
 }
 
