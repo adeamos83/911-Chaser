@@ -78,7 +78,12 @@ describe("mapOptions", () => {
       ],
       seller_comments: "Sport Chrono Package, Porsche Ceramic Composite Brakes (PCCB), sunroof",
     };
-    expect(mapOptions(extra, "Coupe").sort()).toEqual(["PCCB", "RAS", "SPORT_CHRONO", "SUNROOF"]);
-    expect(mapOptions(extra, "Cabriolet")).not.toContain("SUNROOF");
+    expect(mapOptions(extra, "Coupe", "992.1").sort()).toEqual(["PCCB", "RAS", "SPORT_CHRONO", "SUNROOF"]);
+    expect(mapOptions(extra, "Cabriolet", "992.1")).not.toContain("SUNROOF");
+  });
+
+  it("reads options from Porsche factory codes the dealer never mentioned", () => {
+    const extra = { options_packages: ["8LH", "2UH", "9VL"], seller_comments: "" };
+    expect(mapOptions(extra, "Coupe", "992.1").sort()).toEqual(["FRONT_LIFT", "SPORT_CHRONO"]);
   });
 });

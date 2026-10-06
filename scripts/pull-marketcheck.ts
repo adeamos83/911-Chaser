@@ -274,7 +274,7 @@ async function buildListingsFile(searchFolder = "search") {
       const optionSheet = JSON.parse(readFileSync(optionSheetFile, "utf8"));
       newListings.push({
         ...car,
-        options: mapOptions(optionSheet, car.body),
+        options: mapOptions(optionSheet, car.body, car.generation),
         optionsKnown: true,
         factoryCodes: factoryCodesFrom(optionSheet),
       });

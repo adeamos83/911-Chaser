@@ -1,9 +1,10 @@
 /**
  * Turns raw MarketCheck API listings into our Listing shape: works out the trim, generation,
- * body, paint tier and options from the free-text fields dealers fill in.
+ * body, paint tier and options from the free-text fields dealers fill in and Porsche's factory codes.
  */
 import { COLORS, TRIMS, optionAvailableOn } from "../src/data/catalog";
-import type { Body, ColorTier, Listing, Trim } from "../src/data/types";
+import { optionsFromFactoryCodes } from "../src/data/factoryCodes";
+import type { Body, ColorTier, Generation, Listing, Trim } from "../src/data/types";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -180,8 +181,14 @@ export function factoryCodesFrom(extra: any): string[] {
   return optionPackages.filter((optionPackage) => typeof optionPackage === "string");
 }
 
-/** Finds option codes from MarketCheck's structured features plus a text search of the dealer's description. */
-export function mapOptions(extra: any, body: Body): string[] {
+/**
+ * Finds which options a car has, from three real sources: Porsche's factory codes,
+ * MarketCheck's structured features, and a text search of the dealer's description.
+ * Factory codes are the most reliable but often incomplete, so we combine all three.
+ */
+export function mapOptions(extra: any, body: Body, generation: Generation): string[] {
+  const codesFromFactory = optionsFromFactoryCodes(factoryCodesFrom(extra), generation);
+
   const features: any[] = extra.high_value_features ?? [];
   const optionalFeatures = features.filter(
     (feature) => feature.type === "Optional" && OPTIONAL_FEATURES[feature.description],
@@ -192,6 +199,6 @@ export function mapOptions(extra: any, body: Body): string[] {
   const matchingPatterns = OPTION_PATTERNS.filter(([, pattern]) => pattern.test(text));
   const codesFromText = matchingPatterns.map(([code]) => code);
 
-  const uniqueCodes = new Set([...codesFromFeatures, ...codesFromText]);
+  const uniqueCodes = new Set([...codesFromFactory, ...codesFromFeatures, ...codesFromText]);
   return [...uniqueCodes].filter((code) => optionAvailableOn(code, body));
 }
