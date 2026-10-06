@@ -174,6 +174,12 @@ function searchableText(extra: any): string {
   return allText.toLowerCase();
 }
 
+/** Returns the Porsche factory option codes from a MarketCheck option sheet (like "8LH" or "640"). */
+export function factoryCodesFrom(extra: any): string[] {
+  const optionPackages: any[] = extra.options_packages ?? [];
+  return optionPackages.filter((optionPackage) => typeof optionPackage === "string");
+}
+
 /** Finds option codes from MarketCheck's structured features plus a text search of the dealer's description. */
 export function mapOptions(extra: any, body: Body): string[] {
   const features: any[] = extra.high_value_features ?? [];

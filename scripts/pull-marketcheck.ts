@@ -256,7 +256,7 @@ async function getOptionSheets(maxCars: number, searchFolder = "search") {
 // ---------------------------------------------------------------------------
 
 async function buildListingsFile(searchFolder = "search") {
-  const { mapListing, mapOptions } = await import("./marketcheck-map");
+  const { mapListing, mapOptions, factoryCodesFrom } = await import("./marketcheck-map");
   const currentListings = readCurrentListings();
   const newListings: Listing[] = [];
 
@@ -270,12 +270,17 @@ async function buildListingsFile(searchFolder = "search") {
     const lastMonth = currentListings.get(car.id);
 
     if (existsSync(optionSheetFile)) {
-      // We have this car's option sheet: turn it into our option codes.
+      // We have this car's option sheet: turn it into our option codes, and keep the raw factory codes.
       const optionSheet = JSON.parse(readFileSync(optionSheetFile, "utf8"));
-      newListings.push({ ...car, options: mapOptions(optionSheet, car.body), optionsKnown: true });
+      newListings.push({
+        ...car,
+        options: mapOptions(optionSheet, car.body),
+        optionsKnown: true,
+        factoryCodes: factoryCodesFrom(optionSheet),
+      });
     } else if (lastMonth?.optionsKnown) {
       // We got this car's options in an earlier month: reuse them instead of paying again.
-      newListings.push({ ...car, options: lastMonth.options, optionsKnown: true });
+      newListings.push({ ...car, options: lastMonth.options, optionsKnown: true, factoryCodes: lastMonth.factoryCodes });
     } else {
       // No option data for this car yet.
       newListings.push({ ...car, options: [], optionsKnown: false });

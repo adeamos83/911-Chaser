@@ -56,6 +56,8 @@ export interface Listing {
   date: string;
   /** False when we only have the listing, not its option sheet. */
   optionsKnown?: boolean;
+  /** Porsche factory option codes from MarketCheck (see factoryCodes.ts). Often incomplete. */
+  factoryCodes?: string[];
   vdpUrl?: string;
   dom?: number;
 }
