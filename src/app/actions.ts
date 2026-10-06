@@ -10,6 +10,7 @@ import { createClient } from "@/lib/supabase/server";
 export async function analyzeSpec(input: BuildSpec, mileage?: number) {
   const spec = normalizeSpec(input);
   return {
+    spec,
     estimate: estimateBuild(spec, { listings: LISTINGS, table: getPremiumTable() }, mileage === undefined ? undefined : { mileage }),
     priceByYear: priceByYear(LISTINGS, spec),
     slopes: (({ perMile, perYear }) => ({ perTenKMiles: perMile * 10000, perYear }))(fitCohort(cohort(LISTINGS, spec))),

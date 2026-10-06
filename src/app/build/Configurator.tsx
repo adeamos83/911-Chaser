@@ -33,6 +33,7 @@ export function Configurator({ initialSpec, initialAnalysis, optionValues, signe
   const [mileage, setMileage] = useState<number | undefined>(undefined);
   const [pending, startTransition] = useTransition();
   const first = useRef(true);
+  const latest = useRef(0);
 
   useEffect(() => {
     if (first.current) {
@@ -40,7 +41,16 @@ export function Configurator({ initialSpec, initialAnalysis, optionValues, signe
       return;
     }
     window.history.replaceState(null, "", `/build?${specToQuery(spec)}`);
-    const t = setTimeout(() => startTransition(async () => setAnalysis(await analyzeSpec(spec, mileage))), 120);
+    const id = ++latest.current;
+    const t = setTimeout(
+      () =>
+        startTransition(async () => {
+          const next = await analyzeSpec(spec, mileage);
+          // Rapid clicks can resolve out of order; only the newest request may update the screen.
+          if (id === latest.current) setAnalysis(next);
+        }),
+      120,
+    );
     return () => clearTimeout(t);
   }, [spec, mileage]);
 
@@ -54,6 +64,10 @@ export function Configurator({ initialSpec, initialAnalysis, optionValues, signe
   const paint = colorDef(spec.color)!;
   const trim = trimSpec(spec.generation, spec.trim)!;
   const est = analysis.estimate;
+  // Chart and price text describe the spec the current numbers were computed for, so the axis
+  // never switches before its data arrives.
+  const shown = analysis.spec;
+  const shownTrim = trimSpec(shown.generation, shown.trim)!;
 
   return (
     <main className="mx-auto grid max-w-7xl gap-10 px-5 py-10 lg:grid-cols-[1.15fr_1fr]" style={{ ["--accent" as string]: `color-mix(in oklab, ${paint.hex} 65%, #f2efea)` }}>
@@ -138,13 +152,13 @@ export function Configurator({ initialSpec, initialAnalysis, optionValues, signe
             {est && <ConfidencePill level={est.confidence} />}
           </div>
           {est ? (
-            <>
-              <p className={`tabular mt-3 font-display text-6xl transition-opacity ${pending ? "opacity-40" : ""}`}>{usd(est.mid)}</p>
+            <div className={`transition-opacity duration-300 ${pending ? "opacity-40" : "opacity-100"}`}>
+              <p className="tabular mt-3 font-display text-6xl">{usd(est.mid)}</p>
               <p className="tabular mt-1 text-muted">
                 Typical range {usd(est.low)} to {usd(est.high)} at {Math.round(est.mileage / 1000)}K miles
               </p>
               <p className="mt-1 text-xs text-muted">
-                Based on {est.sample} real {spec.generation} {spec.trim} listings (MarketCheck, Oct 2026). Typical car in this set has{" "}
+                Based on {est.sample} real {shown.generation} {shown.trim} listings (MarketCheck, Oct 2026). Typical car in this set has{" "}
                 {Math.round(est.medianMileage / 1000)}K miles.
               </p>
               <label className="mt-5 block">
@@ -169,7 +183,7 @@ export function Configurator({ initialSpec, initialAnalysis, optionValues, signe
                   className="mt-2 w-full accent-[var(--accent)]"
                 />
               </label>
-            </>
+            </div>
           ) : (
             <p className="mt-3 text-muted">Not enough market data for this spec.</p>
           )}
@@ -230,16 +244,22 @@ export function Configurator({ initialSpec, initialAnalysis, optionValues, signe
           </div>
         </div>
 
-        <div className="rounded-2xl border border-line bg-panel p-6">
-          <p className="eyebrow">
-            Price by model year · {spec.generation} {spec.trim}
-          </p>
-          <p className="mt-1 text-sm text-muted">
-            Median asking price for each model year ({trim.years[0]}
-            {trim.years[1] > trim.years[0] && `-${trim.years[1]}`}), from real listings.
-          </p>
-          {(analysis.slopes.perYear > 0 || analysis.slopes.perTenKMiles < 0) && (
-            <p className="mt-3 text-sm">
+        <div className="relative rounded-2xl border border-line bg-panel p-6">
+          {pending && (
+            <span className="absolute top-5 right-6 flex items-center gap-2 text-xs text-muted" aria-live="polite">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
+              Updating…
+            </span>
+          )}
+          <div className={`transition-opacity duration-300 ${pending ? "opacity-40" : "opacity-100"}`}>
+            <p className="eyebrow">
+              Price by model year · {shown.generation} {shown.trim}
+            </p>
+            <p className="mt-1 text-sm text-muted">
+              Median asking price for each model year ({shownTrim.years[0]}
+              {shownTrim.years[1] > shownTrim.years[0] && `-${shownTrim.years[1]}`}), from real listings.
+            </p>
+            <p className="mt-3 min-h-5 text-sm">
               {analysis.slopes.perYear > 0 && (
                 <>
                   Each year older: <span className="tabular text-pit">-{usd(analysis.slopes.perYear)}</span>
@@ -253,43 +273,48 @@ export function Configurator({ initialSpec, initialAnalysis, optionValues, signe
                 </>
               )}
             </p>
-          )}
-          {analysis.priceByYear.length === 0 ? (
-            <p className="mt-6 text-sm text-muted">Not enough listings yet to chart this model.</p>
-          ) : (
-            <div className="mt-4 h-56">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={analysis.priceByYear} margin={{ top: 16, right: 12, bottom: 0, left: 0 }}>
-                  <XAxis
-                    dataKey="year"
-                    type="number"
-                    domain={[trim.years[0] - 0.5, trim.years[1] + 0.5]}
-                    ticks={Array.from({ length: trim.years[1] - trim.years[0] + 1 }, (_, i) => trim.years[0] + i)}
-                    stroke="#6b675f"
-                    tickLine={false}
-                    fontSize={12}
-                  />
-                  <YAxis
-                    stroke="#6b675f"
-                    tickLine={false}
-                    fontSize={12}
-                    width={48}
-                    domain={[(min: number) => min * 0.9, (max: number) => max * 1.05]}
-                    tickFormatter={(v) => usdK(v)}
-                  />
-                  <Tooltip
-                    contentStyle={{ background: "#131315", border: "1px solid #26262a", borderRadius: 8 }}
-                    formatter={(v, _n, item) => [
-                      `${usd(Number(v))} median · ${item.payload.sample} listings`,
-                      "Asking",
-                    ]}
-                    labelFormatter={(y) => `${y} model year`}
-                  />
-                  <Line type="monotone" dataKey="medianPrice" stroke="var(--accent)" strokeWidth={2.5} dot={{ r: 4 }} isAnimationActive={false} />
-                </LineChart>
-              </ResponsiveContainer>
+            <div key={`${shown.generation}-${shown.trim}`} className="fade-in mt-4 h-56">
+              {analysis.priceByYear.length === 0 ? (
+                <p className="pt-20 text-center text-sm text-muted">Not enough listings yet to chart this model.</p>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={analysis.priceByYear} margin={{ top: 16, right: 12, bottom: 0, left: 0 }}>
+                    <XAxis
+                      dataKey="year"
+                      type="number"
+                      domain={[shownTrim.years[0] - 0.5, shownTrim.years[1] + 0.5]}
+                      ticks={Array.from({ length: shownTrim.years[1] - shownTrim.years[0] + 1 }, (_, i) => shownTrim.years[0] + i)}
+                      stroke="#6b675f"
+                      tickLine={false}
+                      fontSize={12}
+                    />
+                    <YAxis
+                      stroke="#6b675f"
+                      tickLine={false}
+                      fontSize={12}
+                      width={48}
+                      domain={[(min: number) => min * 0.9, (max: number) => max * 1.05]}
+                      tickFormatter={(v) => usdK(v)}
+                    />
+                    <Tooltip
+                      contentStyle={{ background: "#131315", border: "1px solid #26262a", borderRadius: 8 }}
+                      formatter={(v, _n, item) => [`${usd(Number(v))} median · ${item.payload.sample} listings`, "Asking"]}
+                      labelFormatter={(y) => `${y} model year`}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="medianPrice"
+                      stroke="var(--accent)"
+                      strokeWidth={2.5}
+                      dot={{ r: 4 }}
+                      animationDuration={700}
+                      animationEasing="ease-out"
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
             </div>
-          )}
+          </div>
         </div>
       </section>
     </main>
