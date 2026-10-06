@@ -45,3 +45,6 @@ next-env.d.ts
 IMPLEMENTATION_PLAN.md
 temporary screenshots/
 .cache/
+
+# supabase cli
+supabase/.temp/
