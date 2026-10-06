@@ -1,62 +1,72 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { trimSpec } from "@/data/catalog";
 import type { BuildSpec } from "@/data/types";
 import { cohort, estimateBuild, fitCohort, priceByYear } from "@/lib/engine";
+import type { StoredBuildSpec } from "@/lib/garage";
 import { LISTINGS, getPremiumTable } from "@/lib/market";
-import { normalizeSpec } from "@/lib/spec";
+import { defaultBuildName, normalizeSpec, type PricedAt } from "@/lib/spec";
 import { createClient } from "@/lib/supabase/server";
 import { MAX_BUILD_NAME_LENGTH } from "@/lib/limits";
 
-// The mileage depreciation rate is shown per 10,000 miles.
-const MILES_PER_SLOPE_STEP = 10000;
+/** Keeps a requested model year inside the years this generation and trim were sold. */
+function clampModelYear(spec: BuildSpec, modelYear: number | undefined): number | undefined {
+  if (modelYear === undefined) return undefined;
+  const years = trimSpec(spec.generation, spec.trim)?.years;
+  if (!years) return undefined;
+  const [firstYear, lastYear] = years;
+  return Math.min(lastYear, Math.max(firstYear, Math.round(modelYear)));
+}
 
-/** Everything the configurator shows for a spec: price estimate, price-by-year chart, and depreciation rates. */
-export async function analyzeSpec(input: BuildSpec, mileage?: number) {
+/**
+ * Everything the configurator shows for a spec: the estimate and its breakdown, the median
+ * price by model year, and how much value each extra mile and each older year costs.
+ */
+export async function analyzeSpec(input: BuildSpec, pricedAt: PricedAt = {}) {
   const spec = normalizeSpec(input);
+  const modelYear = clampModelYear(spec, pricedAt.modelYear);
 
   const context = { listings: LISTINGS, table: getPremiumTable() };
-  const estimate = estimateBuild(spec, context, mileage === undefined ? undefined : { mileage });
+  const estimate = estimateBuild(spec, context, { mileage: pricedAt.mileage, modelYear });
 
-  const similarListings = cohort(LISTINGS, spec);
-  const fit = fitCohort(similarListings);
-  const slopes = { perTenKMiles: fit.perMile * MILES_PER_SLOPE_STEP, perYear: fit.perYear };
+  const fit = fitCohort(cohort(LISTINGS, spec));
+  const slopes = { perMile: fit.perMile, perYear: fit.perYear };
 
   const pricesByYear = priceByYear(LISTINGS, spec);
   return { spec, estimate, priceByYear: pricesByYear, slopes };
 }
 
-const cleanBuildName = (name: string) => name.trim().slice(0, MAX_BUILD_NAME_LENGTH);
-
-/** Saves a build to the signed-in user's garage. Returns the new id, or an error message. */
-export async function saveBuild(name: string, input: BuildSpec): Promise<{ error?: string; id?: string }> {
+/**
+ * Saves a build to the signed-in user's garage, along with today's estimate so the garage
+ * can later show how far its value has moved. Returns the new id, or an error message.
+ */
+export async function saveBuild(input: BuildSpec, pricedAt: PricedAt): Promise<{ error?: string; id?: string }> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { error: "Sign in to save builds." };
+  if (!user) return { error: "Log in to save builds." };
 
-  const cleanName = cleanBuildName(name);
-  if (!cleanName) return { error: "Give the build a name." };
+  // Price the build on the server, so the saved value can't be tampered with.
+  const analysis = await analyzeSpec(input, pricedAt);
+  const storedSpec: StoredBuildSpec = {
+    ...analysis.spec,
+    modelYear: analysis.estimate?.modelYear,
+    mileage: analysis.estimate?.mileage,
+    savedValue: analysis.estimate?.mid,
+  };
+  const name = defaultBuildName(analysis.spec).slice(0, MAX_BUILD_NAME_LENGTH);
 
   const { data, error } = await supabase
     .from("builds")
-    .insert({ user_id: user.id, name: cleanName, spec: normalizeSpec(input) })
+    .insert({ user_id: user.id, name, spec: storedSpec })
     .select("id")
     .single();
   if (error) return { error: error.message };
   revalidatePath("/garage");
   return { id: data.id };
-}
-
-/** Renames a saved build (form action from the garage page). */
-export async function renameBuild(formData: FormData) {
-  const id = String(formData.get("id"));
-  const name = cleanBuildName(String(formData.get("name") ?? ""));
-  if (!name) return;
-  const supabase = await createClient();
-  await supabase.from("builds").update({ name }).eq("id", id);
-  revalidatePath("/garage");
 }
 
 /** Deletes a saved build (form action from the garage page). */
@@ -67,9 +77,10 @@ export async function deleteBuild(formData: FormData) {
   revalidatePath("/garage");
 }
 
-/** Signs the user out and refreshes every page so the header updates. */
+/** Signs the user out and sends them to the home page. */
 export async function signOut() {
   const supabase = await createClient();
   await supabase.auth.signOut();
   revalidatePath("/", "layout");
+  redirect("/");
 }

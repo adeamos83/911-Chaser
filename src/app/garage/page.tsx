@@ -1,90 +1,132 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { colorDef } from "@/data/catalog";
-import type { BuildSpec } from "@/data/types";
-import { Car911 } from "@/components/Car911";
-import { estimateBuild } from "@/lib/engine";
-import { LISTINGS, getPremiumTable } from "@/lib/market";
-import { normalizeSpec, specToQuery, usd } from "@/lib/spec";
-import { createClient } from "@/lib/supabase/server";
-import { deleteBuild, renameBuild } from "../actions";
-import { MAX_BUILD_NAME_LENGTH } from "@/lib/limits";
+import { AppShell } from "@/components/AppShell";
+import { PageTitle } from "@/components/PageTitle";
+import { estimateBuild, priceByYear } from "@/lib/engine";
+import { amountColorClass, formatCount, formatMiles, formatSignedUsd, formatUsd } from "@/lib/format";
+import { getSignedInUser, loadSavedBuilds, type SavedBuild } from "@/lib/garage";
+import { DATA_UPDATED_ON, LISTINGS, getPremiumTable, getScoredListings } from "@/lib/market";
+import { paintHexFor } from "@/lib/paint";
+import { configuratorLink, dealsLink } from "@/lib/spec";
+import { BuildCard, type BuildCardData } from "./BuildCard";
 
-// Paint shown when a saved color is no longer in the catalog.
-const FALLBACK_PAINT_HEX = "#888";
-const MILES_PER_THOUSAND = 1000;
-
-/** The signed-in user's saved builds, each with a price estimate and rename, open, and delete controls. */
+/** The signed-in user's saved builds, with combined stats on top and one card per build. */
 export default async function GaragePage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getSignedInUser();
   if (!user) redirect("/login?next=/garage");
 
-  const { data: builds, error } = await supabase
-    .from("builds")
-    .select("id, name, spec, created_at")
-    .order("created_at", { ascending: false });
+  const { builds, error } = await loadSavedBuilds();
+  const cards = builds.map(cardDataFor);
 
-  const ctx = { listings: LISTINGS, table: getPremiumTable() };
+  const combinedValue = sumOf(cards.map((card) => card.value ?? 0));
+  const combinedChange = sumOf(cards.map((card) => card.changeSinceAdded ?? 0));
+  // Builds saved before we stored their value can't show a change, so don't pretend it's $0.
+  const anyBuildTracked = cards.some((card) => card.changeSinceAdded !== null);
+  const changeText = anyBuildTracked ? formatSignedUsd(combinedChange) : "—";
+  const changeColor = anyBuildTracked ? amountColorClass(combinedChange) : "text-muted";
+  const combinedDeals = sumOf(cards.map((card) => card.dealsUnderMarket));
+  const headline = cards.length === 0 ? "No dream builds yet" : formatCount(cards.length, "dream build");
 
   return (
-    <main className="mx-auto max-w-7xl px-5 py-10">
-      <p className="eyebrow">{user.email}</p>
-      <h1 className="mt-2 font-display text-5xl">Your garage</h1>
-      {error && <p className="mt-4 text-pit">Couldn&apos;t load builds: {error.message}</p>}
+    <AppShell activePage="garage" status={`Values refreshed ${DATA_UPDATED_ON}`} signedIn>
+      <PageTitle
+        eyebrow="Garage"
+        headline={headline}
+        aside={
+          cards.length > 0 && (
+            <div className="flex flex-wrap gap-10">
+              <Stat label="Combined value" value={formatUsd(combinedValue)} />
+              <Stat label="Since added" value={changeText} colorClass={changeColor} />
+              <Stat label="Deals under market" value={String(combinedDeals)} colorClass={combinedDeals > 0 ? "text-positive" : "text-ink"} />
+            </div>
+          )
+        }
+      />
 
-      {builds?.length === 0 && (
-        <div className="mt-10 rounded-2xl border border-dashed border-line p-10 text-center">
-          <p className="text-muted">No saved builds yet.</p>
-          <Link href="/build" className="mt-4 inline-block rounded-full bg-ink px-5 py-2.5 font-medium text-bg">
-            Spec your first 911
-          </Link>
-        </div>
-      )}
+      {error && <p className="px-5 pt-4 text-small text-negative sm:px-9">Couldn&apos;t load your builds: {error}</p>}
 
-      <ul className="mt-8 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-        {builds?.map((build) => {
-          const spec = normalizeSpec(build.spec as BuildSpec);
-          const estimate = estimateBuild(spec, ctx);
-          const paintHex = colorDef(spec.color)?.hex ?? FALLBACK_PAINT_HEX;
-          const buildQuery = specToQuery(spec);
-          return (
-            <li key={build.id} className="flex flex-col rounded-2xl border border-line bg-panel p-5">
-              <Car911 color={paintHex} className="w-full" />
-              <form action={renameBuild} className="mt-2 flex gap-2">
-                <input type="hidden" name="id" value={build.id} />
-                <input
-                  name="name"
-                  defaultValue={build.name}
-                  maxLength={MAX_BUILD_NAME_LENGTH}
-                  aria-label="Build name"
-                  className="min-w-0 flex-1 border-b border-transparent bg-transparent font-display text-2xl outline-none hover:border-line focus:border-accent"
-                />
-                <button className="text-xs text-muted hover:text-ink">Rename</button>
-              </form>
-              <p className="mt-1 text-sm text-muted">
-                {spec.generation} {spec.trim} {spec.body} · {spec.transmission} · {spec.color} · {spec.options.length} options
-              </p>
-              {estimate && (
-                <p className="tabular mt-3 text-xl">
-                  {usd(estimate.mid)}{" "}
-                  <span className="text-sm text-muted">typical asking at {Math.round(estimate.mileage / MILES_PER_THOUSAND)}K mi</span>
-                </p>
-              )}
-              <div className="mt-auto flex items-center gap-4 pt-5 text-sm">
-                <Link href={`/build?${buildQuery}`} className="rounded-full bg-ink px-4 py-2 font-medium text-bg hover:bg-white">Open</Link>
-                <Link href={`/deals?${buildQuery}`} className="text-muted hover:text-ink">Deals</Link>
-                <form action={deleteBuild} className="ml-auto">
-                  <input type="hidden" name="id" value={build.id} />
-                  <button className="text-pit/80 hover:text-pit">Delete</button>
-                </form>
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-    </main>
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(min(360px,100%),1fr))] gap-5 px-5 pt-[30px] pb-9 sm:px-9">
+        {cards.map((card) => (
+          <BuildCard key={card.id} build={card} />
+        ))}
+        <NewBuildCard />
+      </div>
+    </AppShell>
+  );
+}
+
+/** Works out everything one card shows: today's value, change since saved, sparkline data and deal count. */
+function cardDataFor(build: SavedBuild): BuildCardData {
+  const context = { listings: LISTINGS, table: getPremiumTable() };
+  const pricedAt = { modelYear: build.modelYear, mileage: build.mileage };
+  const estimate = estimateBuild(build.spec, context, pricedAt);
+  const value = estimate ? estimate.mid : null;
+
+  // Only builds saved since we started storing the value can show a change.
+  let changeSinceAdded: number | null = null;
+  if (build.savedValue !== undefined && value !== null) {
+    changeSinceAdded = value - build.savedValue;
+  }
+
+  const yearPoints = priceByYear(LISTINGS, build.spec);
+
+  // e.g. "2022 911 Carrera S · Shark Blue · Manual · 9,800 mi"
+  const modelYear = estimate?.modelYear ?? build.modelYear;
+  const mileage = estimate?.mileage ?? build.mileage;
+  const yearText = modelYear === undefined ? "" : `${modelYear} `;
+  const specParts = [`${yearText}911 ${build.spec.trim}`, build.spec.color, build.spec.transmission];
+  if (mileage !== undefined) specParts.push(formatMiles(mileage));
+
+  return {
+    id: build.id,
+    name: build.name,
+    generation: build.spec.generation,
+    createdAt: build.createdAt,
+    paintHex: paintHexFor(build.spec.color),
+    specLine: specParts.join(" · "),
+    value,
+    changeSinceAdded,
+    optionCount: build.spec.options.length,
+    optionsValue: estimate?.breakdown.options ?? 0,
+    pricesByYear: yearPoints.map((point) => point.medianPrice),
+    dealsUnderMarket: countDealsUnderMarket(build),
+    editHref: configuratorLink(build.spec, pricedAt),
+    dealsHref: dealsLink(build.spec),
+  };
+}
+
+/** How many cars of this generation and model are for sale under our estimate right now. */
+function countDealsUnderMarket(build: SavedBuild): number {
+  const sameModel = getScoredListings().filter(
+    (scored) => scored.listing.generation === build.spec.generation && scored.listing.trim === build.spec.trim,
+  );
+  return sameModel.filter((scored) => scored.difference < 0).length;
+}
+
+function sumOf(numbers: number[]): number {
+  return numbers.reduce((total, number) => total + number, 0);
+}
+
+/** One headline stat in the title area, e.g. "Combined value $612,400". */
+function Stat({ label, value, colorClass = "text-ink" }: { label: string; value: string; colorClass?: string }) {
+  return (
+    <div>
+      <div className="text-caption text-muted">{label}</div>
+      <div className={`tabular mt-0.5 text-[28px] font-semibold tracking-[-.02em] ${colorClass}`}>{value}</div>
+    </div>
+  );
+}
+
+/** The dashed "+ New build" card at the end of the grid. */
+function NewBuildCard() {
+  return (
+    <Link
+      href="/build"
+      className="flex min-h-[320px] flex-col items-center justify-center gap-2.5 rounded-rail border border-dashed border-ink/25 text-ink no-underline transition-colors hover:border-ink/50"
+    >
+      <span className="flex h-11 w-11 items-center justify-center rounded-full border border-ink/20 text-[22px] font-light">+</span>
+      <span className="text-[14px] font-semibold">New build</span>
+      <span className="text-caption text-muted">Configure a 911 and start tracking it</span>
+    </Link>
   );
 }

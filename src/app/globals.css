@@ -1,86 +1,80 @@
 @import "tailwindcss";
 
-:root {
-  --bg: #0b0b0c;
-  --panel: #131315;
-  --line: #26262a;
-  --ink: #f2efea;
-  --muted: #9b968e;
-  --accent: #c9a96e;
-  --holder: #7fc79a;
-  --neutral: #d8b45a;
-  --pit: #e2685a;
+/*
+ * 911 Chaser design tokens. Each one becomes a Tailwind class:
+ *   --color-ink      ->  text-ink, bg-ink, border-ink
+ *   --radius-rail    ->  rounded-rail
+ *   --shadow-card    ->  shadow-card
+ *   --text-caption   ->  text-caption
+ */
+@theme {
+  /* surfaces */
+  --color-page: #edeae3;
+  --color-card: #f6f3ed;
+  --color-surface: #fdfcfa;
+
+  /* text */
+  --color-ink: #1c1b19;
+  --color-muted: #76716a;
+  --color-body: #3d3a35;
+  --color-inverse: #f6f3ed;
+
+  /* lines and wells */
+  --color-hairline: rgba(28, 27, 25, 0.08);
+  --color-line: rgba(28, 27, 25, 0.14);
+  --color-line-strong: rgba(28, 27, 25, 0.18);
+  --color-track: rgba(28, 27, 25, 0.12);
+  --color-well: rgba(28, 27, 25, 0.06);
+
+  /* meaning */
+  --color-positive: #2d7d55;
+  --color-negative: #b8463a;
+  --color-accent: #5b509e;
+  --color-accent-hover: #3f3775;
+
+  /* type */
+  --font-sans: var(--font-figtree), system-ui, sans-serif;
+  --text-price: 46px;
+  --text-value: 15px;
+  --text-small: 13px;
+  --text-caption: 12px;
+  --text-micro: 11px;
+
+  /* radii */
+  --radius-pill: 999px;
+  --radius-auth: 20px;
+  --radius-rail: 18px;
+  --radius-hero: 16px;
+  --radius-frame: 14px;
+  --radius-button: 12px;
+  --radius-input: 10px;
+  --radius-tooltip: 8px;
+
+  /* shadows */
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06), 0 24px 60px -30px rgba(0, 0, 0, 0.25);
+  --shadow-auth: 0 1px 3px rgba(0, 0, 0, 0.05), 0 30px 60px -36px rgba(0, 0, 0, 0.3);
+  --shadow-chip: 0 10px 30px -14px rgba(28, 27, 25, 0.35);
+  --shadow-segment: 0 1px 3px rgba(28, 27, 25, 0.12);
+  --shadow-thumb: 0 2px 8px rgba(28, 27, 25, 0.18);
+  --shadow-tooltip: 0 6px 16px -6px rgba(28, 27, 25, 0.4);
+  --shadow-knob: 0 1px 3px rgba(28, 27, 25, 0.2);
 }
 
-@theme inline {
-  --color-bg: var(--bg);
-  --color-panel: var(--panel);
-  --color-line: var(--line);
-  --color-ink: var(--ink);
-  --color-muted: var(--muted);
-  --color-accent: var(--accent);
-  --color-holder: var(--holder);
-  --color-neutral: var(--neutral);
-  --color-pit: var(--pit);
-  --font-display: var(--font-serif);
-  --font-sans: var(--font-body);
-}
-
+/* The design uses the browser's natural line height, not Tailwind's default of 1.5. */
 html {
-  color-scheme: dark;
+  color-scheme: light;
+  line-height: normal;
 }
 
 body {
-  background: var(--bg);
-  color: var(--ink);
-  font-family: var(--font-body), system-ui, sans-serif;
+  margin: 0;
+  background: var(--color-card);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
 
-.eyebrow {
-  font-size: 0.7rem;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
+/* Prices and other figures line up when every digit is the same width. */
 .tabular {
   font-variant-numeric: tabular-nums;
-}
-
-@keyframes paint-cycle {
-  0%, 18% { fill: #1d2f6b; }
-  25%, 43% { fill: #1fa6c9; }
-  50%, 68% { fill: #e5501e; }
-  75%, 93% { fill: #c9c6bc; }
-  100% { fill: #1d2f6b; }
-}
-
-.paint-cycle g[fill] {
-  animation: paint-cycle 14s ease-in-out infinite;
-}
-
-@keyframes rise {
-  from { opacity: 0; transform: translateY(14px); }
-  to { opacity: 1; transform: none; }
-}
-
-.rise {
-  animation: rise 700ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
-}
-
-@keyframes fade-in {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: none; }
-}
-
-.fade-in {
-  animation: fade-in 450ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: 1ms !important;
-    transition-duration: 1ms !important;
-  }
 }

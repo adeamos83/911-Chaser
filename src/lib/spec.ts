@@ -4,10 +4,10 @@ import type { BuildSpec, Generation, Trim } from "@/data/types";
 /** The build shown when the page opens with no spec in the URL. */
 export const DEFAULT_SPEC: BuildSpec = {
   generation: "992.1",
-  trim: "Carrera S",
+  trim: "GTS",
   body: "Coupe",
   transmission: "Manual",
-  color: "Gentian Blue",
+  color: "Shark Blue",
   options: ["SPORT_CHRONO", "PSE"],
 };
 
@@ -82,14 +82,39 @@ export function specFromParams(params: Record<string, string | string[] | undefi
   });
 }
 
-/** A readable name for a saved build, e.g. "992.1 Carrera S in Chalk". */
+/** A readable name for a saved build, e.g. "Chalk Carrera S". */
 export function defaultBuildName(spec: BuildSpec) {
-  return `${spec.generation} ${spec.trim} in ${spec.color.replace(" (PTS)", "")}`;
+  const paintName = spec.color.replace(" (PTS)", "");
+  return `${paintName} ${spec.trim}`;
 }
 
-/** 123456.7 -> "$123,457" */
-export const usd = (amount: number) =>
-  amount.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+/** The model year and mileage a build is priced at. Undefined means "use the typical one". */
+export interface PricedAt {
+  modelYear?: number;
+  mileage?: number;
+}
 
-/** 98765 -> "$99K" */
-export const usdK = (amount: number) => `$${Math.round(amount / 1000)}K`;
+/** Link to the configurator with this spec (and optionally a model year and mileage) preselected. */
+export function configuratorLink(spec: BuildSpec, pricedAt: PricedAt = {}): string {
+  const params = new URLSearchParams(specToQuery(spec));
+  if (pricedAt.modelYear !== undefined) params.set("y", String(pricedAt.modelYear));
+  if (pricedAt.mileage !== undefined) params.set("m", String(Math.round(pricedAt.mileage)));
+  return `/build?${params.toString()}`;
+}
+
+/** Reads the model year (y) and mileage (m) from the configurator URL. Missing or invalid values are left undefined. */
+export function pricedAtFromParams(params: Record<string, string | string[] | undefined>): PricedAt {
+  const readNumber = (key: string): number | undefined => {
+    const rawValue = params[key];
+    const text = Array.isArray(rawValue) ? rawValue[0] : rawValue;
+    const parsed = Number(text);
+    return text && Number.isFinite(parsed) ? parsed : undefined;
+  };
+  return { modelYear: readNumber("y"), mileage: readNumber("m") };
+}
+
+/** Link to the deals page filtered to one generation and model. */
+export function dealsLink(spec: Pick<BuildSpec, "generation" | "trim">): string {
+  const params = new URLSearchParams({ gen: spec.generation, model: spec.trim });
+  return `/deals?${params.toString()}`;
+}

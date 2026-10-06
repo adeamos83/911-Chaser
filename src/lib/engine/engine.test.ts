@@ -121,6 +121,18 @@ describe("modeled dataset (planted effects)", () => {
     expect(estimate.mid).toBeGreaterThan(70000);
     expect(estimate.mid).toBeLessThan(140000);
   });
+  it("breaks the estimate into parts that add up to the middle price", () => {
+    const estimate = estimateBuild(
+      { generation: "992.1", trim: "Carrera S", body: "Coupe", transmission: "Manual", color: "Chalk", options: ["SPORT_CHRONO"] },
+      { listings },
+      { mileage: 30000, modelYear: 2021 },
+    )!;
+    const parts = estimate.breakdown;
+    const partsTotal = parts.bareCar + parts.modelYear + parts.mileage + parts.paint + parts.transmission + parts.options;
+    expect(partsTotal).toBeCloseTo(estimate.mid, 6);
+    expect(estimate.modelYear).toBe(2021);
+    expect(estimate.mileage).toBe(30000);
+  });
 });
 
 describe("price by model year", () => {

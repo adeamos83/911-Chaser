@@ -15,6 +15,22 @@ const HIGH_QUANTILE = 0.75;
 
 // ---------- 6. estimate ----------
 
+/**
+ * Where the estimate's middle price comes from. The parts add up exactly to `mid`:
+ *   mid = bareCar + modelYear + mileage + paint + transmission + options
+ */
+export interface EstimateBreakdown {
+  /** Typical price of this generation and trim with no options, standard paint, PDK, 15K miles, typical year. */
+  bareCar: number;
+  /** Effect of a newer or older model year than the typical one. */
+  modelYear: number;
+  /** Effect of more or fewer miles than 15K. */
+  mileage: number;
+  paint: number;
+  transmission: number;
+  options: number;
+}
+
 export interface Estimate {
   /** 25th percentile: a good-deal price. */
   low: number;
@@ -28,6 +44,11 @@ export interface Estimate {
   mileage: number;
   /** Typical mileage in the comparable set. */
   medianMileage: number;
+  /** Model year the estimate is stated at. */
+  modelYear: number;
+  /** Typical model year in the comparable set. */
+  typicalModelYear: number;
+  breakdown: EstimateBreakdown;
 }
 
 export interface EstimateContext {
@@ -38,20 +59,25 @@ export interface EstimateContext {
 
 type PricedSpec = Pick<BuildSpec, "transmission" | "options"> & { colorTier: ColorTier; optionsKnown?: boolean };
 
-/** Total dollars a car's options, gearbox and paint add on top of a bare car. */
-function specPremium(spec: PricedSpec, table: PremiumTable): number {
-  let total = 0;
-
+/** Dollars a car's options, gearbox and paint each add on top of a bare car. */
+function premiumParts(spec: PricedSpec, table: PremiumTable) {
+  let options = 0;
   if (spec.optionsKnown === false) {
     // We don't know this car's options, so assume it has a typical amount.
-    total += table.avgOptionContent;
+    options = table.avgOptionContent;
   } else {
-    for (const code of spec.options) total += table.options[code]?.premiumUsd ?? 0;
+    for (const code of spec.options) options += table.options[code]?.premiumUsd ?? 0;
   }
 
-  if (spec.transmission === "Manual") total += table.manual.premiumUsd;
-  total += table.colorTier[spec.colorTier].premiumUsd;
-  return total;
+  const transmission = spec.transmission === "Manual" ? table.manual.premiumUsd : 0;
+  const paint = table.colorTier[spec.colorTier].premiumUsd;
+  return { options, transmission, paint };
+}
+
+/** Total dollars a car's options, gearbox and paint add on top of a bare car. */
+function specPremium(spec: PricedSpec, table: PremiumTable): number {
+  const parts = premiumParts(spec, table);
+  return parts.options + parts.transmission + parts.paint;
 }
 
 /**
@@ -84,18 +110,31 @@ export function estimateBuild(
   const medianMileage = Math.round(median(rows.map((listing) => listing.mileage)));
   const mileage = statedAt?.mileage ?? medianMileage;
 
-  let addBack = specPremium({ ...spec, options, colorTier, optionsKnown: true }, table);
-  addBack += fit.perMile * (mileage - REF_MILEAGE);
-  if (statedAt?.modelYear !== undefined) addBack += fit.perYear * (statedAt.modelYear - fit.refYear);
+  const modelYear = statedAt?.modelYear ?? fit.refYear;
+
+  const premiums = premiumParts({ ...spec, options, colorTier, optionsKnown: true }, table);
+  const breakdown: EstimateBreakdown = {
+    bareCar: median(barePrices),
+    modelYear: fit.perYear * (modelYear - fit.refYear),
+    mileage: fit.perMile * (mileage - REF_MILEAGE),
+    paint: premiums.paint,
+    transmission: premiums.transmission,
+    options: premiums.options,
+  };
+  // Everything this spec adds on top of the bare car's price.
+  const addBack = breakdown.modelYear + breakdown.mileage + breakdown.paint + breakdown.transmission + breakdown.options;
 
   return {
     low: quantile(barePrices, LOW_QUANTILE) + addBack,
-    mid: median(barePrices) + addBack,
+    mid: breakdown.bareCar + addBack,
     high: quantile(barePrices, HIGH_QUANTILE) + addBack,
     confidence: confidenceFor(rows.length),
     sample: rows.length,
     mileage,
     medianMileage,
+    modelYear,
+    typicalModelYear: fit.refYear,
+    breakdown,
   };
 }
 
@@ -114,13 +153,20 @@ export function specOf(listing: Listing): BuildSpec {
   };
 }
 
+/** What this exact car (same spec, mileage and model year) should be listed for, or null without comparables. */
+export function expectedPrice(listing: Listing, context: EstimateContext): number | null {
+  const sameMilesAndYear = { mileage: listing.mileage, modelYear: listing.modelYear };
+  const expected = estimateBuild(specOf(listing), context, sameMilesAndYear);
+  if (!expected || expected.mid <= 0) return null;
+  return expected.mid;
+}
+
 /**
  * How far under (+) or over (-) the expected price a listing is, as a fraction.
  * 0.1 means "priced 10% under what this exact car should cost".
  */
 export function dealScore(listing: Listing, context: EstimateContext): number {
-  const sameMilesAndYear = { mileage: listing.mileage, modelYear: listing.modelYear };
-  const expected = estimateBuild(specOf(listing), context, sameMilesAndYear);
-  if (!expected || expected.mid <= 0) return 0;
-  return (expected.mid - listing.price) / expected.mid;
+  const expected = expectedPrice(listing, context);
+  if (expected === null) return 0;
+  return (expected - listing.price) / expected;
 }

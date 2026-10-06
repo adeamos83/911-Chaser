@@ -1,114 +1,183 @@
 import Link from "next/link";
-import { GENERATIONS, colorDef, trimsFor } from "@/data/catalog";
-import type { BuildSpec, Listing } from "@/data/types";
-import { dealScore, type PremiumTable } from "@/lib/engine";
-import { DATA_AS_OF, LISTINGS, getPremiumTable } from "@/lib/market";
-import { specFromParams, specToQuery, usd } from "@/lib/spec";
+import { GENERATIONS } from "@/data/catalog";
+import { AppShell } from "@/components/AppShell";
+import { PageTitle } from "@/components/PageTitle";
+import { OUTLINE_BUTTON } from "@/components/ui/buttonStyles";
+import { Pill } from "@/components/ui/Pill";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import { formatCount } from "@/lib/format";
+import { getSignedInUser, loadSavedBuilds } from "@/lib/garage";
+import { DATA_UPDATED_ON, getPremiumTable, getScoredListings, listingSourceName, type ScoredListing } from "@/lib/market";
+import { paintHexFor } from "@/lib/paint";
+import { ALL_MODELS, ROWS_PER_PAGE, dealsHref, readFilters, type DealFilters, type SortKey } from "./filters";
+import { ListingRow, type ListingRowData } from "./ListingRow";
 
-// Every trim name across all generations, without duplicates, for the "Model" dropdown.
-const ALL_TRIM_NAMES = [...new Set(GENERATIONS.flatMap((generation) => trimsFor(generation).map((trimEntry) => trimEntry.trim)))];
+const SORT_LABELS: Record<SortKey, string> = { best: "Best deal", newest: "Newest", price: "Price" };
+const SORT_ORDER: SortKey[] = ["best", "newest", "price"];
+// Newest generation first.
+const GENERATIONS_NEWEST_FIRST = [...GENERATIONS].reverse();
 
-/** Lists every car for sale that matches the chosen generation and trim, ranked by how far under market it is. */
-export default async function DealsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const spec = specFromParams(await searchParams);
-  const ctx = { listings: LISTINGS, table: getPremiumTable() };
+type SearchParams = Record<string, string | string[] | undefined>;
 
-  // Every car of this generation and trim that's for sale, best deal first.
-  const carsForSale = LISTINGS.filter(
-    (listing) => listing.status === "for_sale" && listing.generation === spec.generation && listing.trim === spec.trim,
-  );
-  const scoredDeals = carsForSale.map((listing) => ({
-    listing,
-    score: dealScore(listing, ctx),
-    matches: featuresMatchingSpec(listing, spec, ctx.table),
+/** Every car for sale, compared against our estimate for the same spec, mileage and model year. */
+export default async function DealsPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
+  const filters = readFilters(await searchParams);
+  const user = await getSignedInUser();
+  const { builds } = user ? await loadSavedBuilds() : { builds: [] };
+
+  // "992.1|Carrera S" for every model in the user's garage.
+  const garageModels = new Set(builds.map((build) => `${build.spec.generation}|${build.spec.trim}`));
+  const isInGarage = (scored: ScoredListing) => garageModels.has(`${scored.listing.generation}|${scored.listing.trim}`);
+
+  const allListings = getScoredListings();
+  const matching = allListings.filter((scored) => matchesFilters(scored, filters, isInGarage));
+  const sorted = sortListings(matching, filters.sort);
+  const shownListings = sorted.slice(0, filters.limit);
+  const underEstimateCount = matching.filter((scored) => scored.difference <= 0).length;
+  const hiddenCount = sorted.length - shownListings.length;
+  const nextPageCount = Math.min(ROWS_PER_PAGE, hiddenCount);
+
+  const rows: ListingRowData[] = shownListings.map((scored) => ({
+    scored,
+    paintHex: paintHexFor(scored.listing.color),
+    sourceName: listingSourceName(scored.listing),
+    optionsText: optionsTextFor(scored),
+    inGarage: isInGarage(scored),
   }));
-  const deals = scoredDeals.sort((first, second) => second.score - first.score);
+
+  const headline = `${underEstimateCount.toLocaleString("en-US")} of ${formatCount(matching.length, "listing")} priced under our estimate`;
+  const status = `Listings updated ${DATA_UPDATED_ON} · ${formatCount(allListings.length, "dealer listing")} via MarketCheck`;
 
   return (
-    <main className="mx-auto max-w-7xl px-5 py-10">
-      <p className="eyebrow">For sale now</p>
-      <h1 className="mt-2 font-display text-5xl">
-        Best deals: {spec.generation} <span className="italic text-accent">{spec.trim}</span>
-      </h1>
-      <p className="mt-2 max-w-2xl text-muted">
-        Real listings from MarketCheck (pulled {DATA_AS_OF}). Each car is priced against what the model expects for its exact year,
-        mileage, gearbox and paint, based on every comparable listing.
-      </p>
+    <AppShell activePage="deals" status={status} signedIn={!!user}>
+      <PageTitle
+        eyebrow="Deals"
+        headline={headline}
+        description="Live dealer listings compared against the 911 Chaser estimate for the same spec, mileage and model year. Green is below estimate, red is above."
+        aside={
+          <SegmentedControl
+            ariaLabel="Sort listings"
+            selectedValue={filters.sort}
+            options={SORT_ORDER.map((sortKey) => ({
+              value: sortKey,
+              label: SORT_LABELS[sortKey],
+              href: dealsHref(filters, { sort: sortKey }),
+            }))}
+          />
+        }
+      />
 
-      <form className="mt-6 flex flex-wrap items-end gap-3 text-sm">
-        <label>
-          <span className="eyebrow block">Generation</span>
-          <select name="g" defaultValue={spec.generation} className="mt-1 rounded-lg border border-line bg-panel px-3 py-2">
-            {GENERATIONS.map((generation) => <option key={generation}>{generation}</option>)}
-          </select>
-        </label>
-        <label>
-          <span className="eyebrow block">Model</span>
-          <select name="t" defaultValue={spec.trim} className="mt-1 rounded-lg border border-line bg-panel px-3 py-2">
-            {ALL_TRIM_NAMES.map((trim) => <option key={trim}>{trim}</option>)}
-          </select>
-        </label>
-        <input type="hidden" name="x" value={spec.transmission} />
-        <input type="hidden" name="c" value={spec.color} />
-        <input type="hidden" name="o" value={spec.options.join(",")} />
-        <button className="rounded-full border border-line px-4 py-2 hover:border-ink">Show deals</button>
-        <Link href={`/build?${specToQuery(spec)}`} className="ml-auto text-muted hover:text-ink">← Back to configurator</Link>
-      </form>
+      <FilterRow filters={filters} signedIn={!!user} />
 
-      {deals.length === 0 ? (
-        <p className="mt-10 text-muted">No {spec.generation} {spec.trim} listings for sale right now.</p>
-      ) : (
-        <ul className="mt-8 grid gap-4 md:grid-cols-2">
-          {deals.map(({ listing, score, matches }) => {
-            const isUnderMarket = score > 0;
-            return (
-              <li key={listing.id} className="rounded-2xl border border-line bg-panel p-5">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="font-display text-2xl">
-                      {listing.modelYear} {listing.trim} {listing.body}
-                    </p>
-                    <p className="mt-1 flex items-center gap-2 text-sm text-muted">
-                      <span className="inline-block h-3 w-3 rounded-full border border-white/20" style={{ background: colorDef(listing.color)?.hex }} />
-                      {listing.color} · {listing.transmission} · {listing.mileage.toLocaleString()} mi
-                    </p>
-                  </div>
-                  <span className={`tabular shrink-0 rounded-full px-3 py-1 text-sm ${isUnderMarket ? "bg-holder/15 text-holder" : "bg-pit/15 text-pit"}`}>
-                    {Math.abs(Math.round(score * 100))}% {isUnderMarket ? "under" : "over"}
-                  </span>
-                </div>
-                <div className="tabular mt-4 flex items-baseline gap-3">
-                  <span className="text-2xl">{usd(listing.price)}</span>
-                  <span className="text-sm text-muted">asking{listing.dom !== undefined && ` · ${listing.dom} days listed`}</span>
-                  {listing.vdpUrl && (
-                    <a href={listing.vdpUrl} target="_blank" rel="noopener noreferrer" className="ml-auto text-sm text-muted underline hover:text-ink">
-                      View listing ↗
-                    </a>
-                  )}
-                </div>
-                {matches.length > 0 && (
-                  <p className="mt-3 text-xs text-muted">
-                    Matches your spec: <span className="text-ink">{matches.join(" · ")}</span>
-                  </p>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </main>
+      <div className="flex flex-col gap-2.5 px-5 pt-[22px] pb-9 sm:px-9">
+        {rows.map((row) => (
+          <ListingRow key={row.scored.listing.id} row={row} />
+        ))}
+
+        {rows.length === 0 && (
+          <div className="rounded-hero border border-dashed border-ink/20 p-12 text-center text-small text-muted">
+            No listings match these filters right now. We refresh listings every month.
+          </div>
+        )}
+
+        {hiddenCount > 0 && (
+          <Link
+            href={dealsHref(filters, { limit: filters.limit + ROWS_PER_PAGE })}
+            scroll={false}
+            className={`${OUTLINE_BUTTON} mt-2 self-center px-5 py-3 text-small`}
+          >
+            Show {nextPageCount} more ({hiddenCount.toLocaleString("en-US")} left)
+          </Link>
+        )}
+      </div>
+    </AppShell>
   );
 }
 
-/** Labels for the parts of a listing that match the user's spec, e.g. ["Manual", "Coupe", "Your paint", "Sport Chrono Package"]. */
-function featuresMatchingSpec(listing: Listing, spec: BuildSpec, table: PremiumTable): string[] {
-  const matches: string[] = [];
-  if (listing.transmission === spec.transmission) matches.push(listing.transmission);
-  if (listing.body === spec.body) matches.push(listing.body);
-  if (listing.color === spec.color) matches.push("Your paint");
-  for (const code of spec.options) {
-    const name = table.options[code]?.name;
-    if (listing.options.includes(code) && name) matches.push(name);
+/** Model pills · generation pills · "Only builds in my garage" switch. */
+function FilterRow({ filters, signedIn }: { filters: DealFilters; signedIn: boolean }) {
+  return (
+    <div className="flex flex-wrap items-center gap-6 px-5 pt-6 sm:px-9">
+      <div className="flex flex-wrap gap-1.5">
+        <Pill size="compact" selected={filters.model === "all"} href={dealsHref(filters, { model: "all" })}>
+          All models
+        </Pill>
+        {ALL_MODELS.map((model) => (
+          <Pill key={model} size="compact" selected={filters.model === model} href={dealsHref(filters, { model })}>
+            {model}
+          </Pill>
+        ))}
+      </div>
+
+      <div className="hidden h-6 w-px bg-track sm:block" />
+
+      <div className="flex flex-wrap gap-1.5">
+        <Pill size="compact" selected={filters.generation === "all"} href={dealsHref(filters, { generation: "all" })}>
+          All generations
+        </Pill>
+        {GENERATIONS_NEWEST_FIRST.map((generation) => (
+          <Pill key={generation} size="compact" selected={filters.generation === generation} href={dealsHref(filters, { generation })}>
+            {generation}
+          </Pill>
+        ))}
+      </div>
+
+      {signedIn && <GarageOnlySwitch filters={filters} />}
+    </div>
+  );
+}
+
+/** A small on/off switch. It's a link, so flipping it just loads the page with the filter changed. */
+function GarageOnlySwitch({ filters }: { filters: DealFilters }) {
+  const isOn = filters.garageOnly;
+  const trackClasses = isOn ? "justify-end bg-ink" : "justify-start bg-line-strong";
+
+  return (
+    <div className="ml-auto flex items-center gap-2 text-small text-muted">
+      <Link
+        href={dealsHref(filters, { garageOnly: !isOn })}
+        scroll={false}
+        role="switch"
+        aria-checked={isOn}
+        aria-label="Only builds in my garage"
+        className={`flex h-[22px] w-9 rounded-pill p-0.5 ${trackClasses}`}
+      >
+        <span className="block h-[18px] w-[18px] rounded-full bg-surface shadow-knob" />
+      </Link>
+      <span>Only builds in my garage</span>
+    </div>
+  );
+}
+
+function matchesFilters(scored: ScoredListing, filters: DealFilters, isInGarage: (scored: ScoredListing) => boolean): boolean {
+  const { listing } = scored;
+  if (filters.generation !== "all" && listing.generation !== filters.generation) return false;
+  if (filters.model !== "all" && listing.trim !== filters.model) return false;
+  if (filters.garageOnly && !isInGarage(scored)) return false;
+  return true;
+}
+
+/** Best deal: furthest under estimate first. Newest: fewest days on market first. Price: cheapest first. */
+function sortListings(listings: ScoredListing[], sort: SortKey): ScoredListing[] {
+  const sorted = [...listings];
+  if (sort === "best") {
+    sorted.sort((first, second) => first.differenceShare - second.differenceShare);
+  } else if (sort === "newest") {
+    // Listings without a days-on-market count go last.
+    const daysListed = (scored: ScoredListing) => scored.listing.dom ?? Number.MAX_SAFE_INTEGER;
+    sorted.sort((first, second) => daysListed(first) - daysListed(second));
+  } else {
+    sorted.sort((first, second) => first.listing.price - second.listing.price);
   }
-  return matches;
+  return sorted;
+}
+
+/** The listing's option names, or a note when the dealer didn't list them. */
+function optionsTextFor(scored: ScoredListing): string {
+  const { listing } = scored;
+  if (listing.optionsKnown === false) return "Options not listed";
+
+  const optionTable = getPremiumTable().options;
+  const optionNames = listing.options.map((code) => optionTable[code]?.name ?? code);
+  return optionNames.length > 0 ? optionNames.join(", ") : "No notable options";
 }
