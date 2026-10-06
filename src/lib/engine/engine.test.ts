@@ -125,6 +125,7 @@ describe("price by model year", () => {
       car({ modelYear: 2021, price: 300000 }),
       car({ modelYear: 2022, price: 120000 }),
     ];
-    expect(priceByYear(rows, "Carrera S")).toEqual([{ year: 2021, medianPrice: 110000, sample: 3 }]);
+    const other = car({ generation: "991.2", modelYear: 2021, price: 50000 });
+    expect(priceByYear([...rows, other], { generation: "992.1", trim: "Carrera S" })).toEqual([{ year: 2021, medianPrice: 110000, sample: 3 }]);
   });
 });

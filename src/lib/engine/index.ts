@@ -214,11 +214,11 @@ export interface YearPoint {
   sample: number;
 }
 
-/** Median asking price by model year for a trim across generations. Independent of MSRP data. */
-export function priceByYear(listings: Listing[], trim: Trim, minSample = 3): YearPoint[] {
+/** Median asking price by model year for one generation + trim. */
+export function priceByYear(listings: Listing[], key: { generation: Generation; trim: Trim }, minSample = 3): YearPoint[] {
   const byYear = new Map<number, number[]>();
-  for (const l of listings) {
-    if (l.trim === trim) byYear.set(l.modelYear, [...(byYear.get(l.modelYear) ?? []), l.price]);
+  for (const l of cohort(listings, key)) {
+    byYear.set(l.modelYear, [...(byYear.get(l.modelYear) ?? []), l.price]);
   }
   return [...byYear.entries()]
     .filter(([, xs]) => xs.length >= minSample)

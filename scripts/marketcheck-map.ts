@@ -1,16 +1,10 @@
-import { COLORS, trimSpec } from "../src/data/catalog";
-import type { Body, ColorTier, Generation, Listing, Trim } from "../src/data/types";
+import { COLORS, TRIMS } from "../src/data/catalog";
+import type { Body, ColorTier, Listing, Trim } from "../src/data/types";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const EXCLUDE = /gt3|gt2|speedster|dakar|sport classic|spirit|anniversary|50 years|exclusive|heritage|^r$|s\/t/i;
 
-export function generationFor(year: number): Generation {
-  if (year <= 2016) return "991.1";
-  if (year <= 2019) return "991.2";
-  if (year <= 2024) return "992.1";
-  return "992.2";
-}
 
 export function trimFor(version: string): Trim | null {
   const v = version.split("|")[0];
@@ -49,10 +43,11 @@ export function mapListing(l: any): MappedListing | null {
   if (!b.year || !b.version || !l.price || l.miles == null) return null;
   const trim = trimFor(b.version);
   if (!trim) return null;
-  const generation = generationFor(b.year);
-  const spec = trimSpec(generation, trim);
-  // Drops cars from the wrong generation, e.g. a 2013 Turbo S is a 997, not a 991.
-  if (!spec || b.year < spec.years[0] || b.year > spec.years[1]) return null;
+  // Generation comes from each model's own US model-year run: a 2025 Carrera S is still a 992.1,
+  // and a 2013 Turbo S is a 997, so it matches nothing and is dropped.
+  const spec = TRIMS.find((t) => t.trim === trim && b.year >= t.years[0] && b.year <= t.years[1]);
+  if (!spec) return null;
+  const generation = spec.generation;
   if (l.price < 15000 || l.price > spec.baseMsrp * 2.5) return null;
   const body: Body = b.body_type === "Targa" || /targa/i.test(b.version) ? "Targa" : b.body_type === "Convertible" ? "Cabriolet" : "Coupe";
   return {

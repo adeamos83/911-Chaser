@@ -39,6 +39,12 @@ describe("mapListing", () => {
     expect(mapListing(raw({}, { year: 2013, version: "Turbo S Coupe" }))).toBeNull();
   });
 
+  it("assigns generation from each model's own launch years", () => {
+    expect(mapListing(raw({}, { year: 2025, version: "Carrera S Coupe" }))?.generation).toBe("992.1");
+    expect(mapListing(raw({}, { year: 2026, version: "Carrera S Coupe" }))?.generation).toBe("992.2");
+    expect(mapListing(raw({}, { year: 2025, version: "Carrera GTS Coupe" }))?.generation).toBe("992.2");
+  });
+
   it("drops listings without price or mileage", () => {
     expect(mapListing(raw({ price: undefined }))).toBeNull();
     expect(mapListing(raw({ miles: undefined }))).toBeNull();

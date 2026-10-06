@@ -4,7 +4,7 @@ export const GENERATIONS: Generation[] = ["991.1", "991.2", "992.1", "992.2"];
 export const BODIES: Body[] = ["Coupe", "Cabriolet", "Targa"];
 const ALL: Generation[] = GENERATIONS;
 
-// Approximate figures for modeling only.
+// US model years. Base MSRPs are approximate launch-year figures.
 export const TRIMS: TrimSpec[] = [
   { generation: "991.1", trim: "Carrera", years: [2012, 2016], hp: 350, zeroToSixty: 4.4, baseMsrp: 84000, manualAvailable: true },
   { generation: "991.1", trim: "Carrera S", years: [2012, 2016], hp: 400, zeroToSixty: 4.1, baseMsrp: 97000, manualAvailable: true },
@@ -23,18 +23,18 @@ export const TRIMS: TrimSpec[] = [
 
   { generation: "992.1", trim: "Carrera", years: [2020, 2024], hp: 379, zeroToSixty: 4.0, baseMsrp: 99000, manualAvailable: false },
   { generation: "992.1", trim: "Carrera T", years: [2023, 2024], hp: 379, zeroToSixty: 4.3, baseMsrp: 107000, manualAvailable: true },
-  { generation: "992.1", trim: "Carrera S", years: [2020, 2024], hp: 443, zeroToSixty: 3.5, baseMsrp: 114000, manualAvailable: true },
-  { generation: "992.1", trim: "Carrera 4S", years: [2020, 2024], hp: 443, zeroToSixty: 3.4, baseMsrp: 121000, manualAvailable: true },
+  { generation: "992.1", trim: "Carrera S", years: [2020, 2025], hp: 443, zeroToSixty: 3.5, baseMsrp: 114000, manualAvailable: true },
+  { generation: "992.1", trim: "Carrera 4S", years: [2020, 2025], hp: 443, zeroToSixty: 3.4, baseMsrp: 121000, manualAvailable: true },
   { generation: "992.1", trim: "GTS", years: [2022, 2024], hp: 473, zeroToSixty: 3.2, baseMsrp: 136000, manualAvailable: true },
-  { generation: "992.1", trim: "Turbo", years: [2021, 2024], hp: 572, zeroToSixty: 2.7, baseMsrp: 171000, manualAvailable: false },
-  { generation: "992.1", trim: "Turbo S", years: [2021, 2024], hp: 640, zeroToSixty: 2.6, baseMsrp: 204000, manualAvailable: false },
+  { generation: "992.1", trim: "Turbo", years: [2021, 2025], hp: 572, zeroToSixty: 2.7, baseMsrp: 171000, manualAvailable: false },
+  { generation: "992.1", trim: "Turbo S", years: [2021, 2025], hp: 640, zeroToSixty: 2.6, baseMsrp: 204000, manualAvailable: false },
 
   { generation: "992.2", trim: "Carrera", years: [2025, 2026], hp: 388, zeroToSixty: 3.9, baseMsrp: 120000, manualAvailable: false },
   { generation: "992.2", trim: "Carrera T", years: [2025, 2026], hp: 388, zeroToSixty: 4.3, baseMsrp: 135000, manualAvailable: true },
-  { generation: "992.2", trim: "Carrera S", years: [2025, 2026], hp: 473, zeroToSixty: 3.3, baseMsrp: 140000, manualAvailable: false },
-  { generation: "992.2", trim: "Carrera 4S", years: [2025, 2026], hp: 473, zeroToSixty: 3.2, baseMsrp: 148000, manualAvailable: false },
+  { generation: "992.2", trim: "Carrera S", years: [2026, 2026], hp: 473, zeroToSixty: 3.3, baseMsrp: 140000, manualAvailable: false },
+  { generation: "992.2", trim: "Carrera 4S", years: [2026, 2026], hp: 473, zeroToSixty: 3.2, baseMsrp: 148000, manualAvailable: false },
   { generation: "992.2", trim: "GTS", years: [2025, 2026], hp: 532, zeroToSixty: 2.9, baseMsrp: 165000, manualAvailable: false },
-  { generation: "992.2", trim: "Turbo S", years: [2025, 2026], hp: 701, zeroToSixty: 2.4, baseMsrp: 230000, manualAvailable: false },
+  { generation: "992.2", trim: "Turbo S", years: [2026, 2026], hp: 701, zeroToSixty: 2.4, baseMsrp: 270300, manualAvailable: false },
 ];
 
 export const OPTIONS: OptionDef[] = [
