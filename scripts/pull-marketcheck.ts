@@ -1,70 +1,50 @@
 /**
- * Pulls real 991/992 listings from MarketCheck.
- * Every raw response is cached under .cache/marketcheck so re-running never spends calls twice.
+ * Pulls used Porsche 911 (991 and 992) listings from the MarketCheck API.
  *
+ * There are three steps:
+ *   1. search  - get every car currently for sale (50 cars per API call)
+ *   2. extras  - get the factory option sheet for some cars (1 car per API call)
+ *   3. build   - turn the raw API data into src/data/listings.json, which the app reads
+ *
+ * Every API response is saved to .cache/marketcheck, so running a step twice
+ * never pays for the same API call twice.
+ *
+ * Run one step at a time:
  *   npx tsx --env-file=.env.local scripts/pull-marketcheck.ts search
  *   npx tsx --env-file=.env.local scripts/pull-marketcheck.ts extras 350
  *   npx tsx scripts/pull-marketcheck.ts build
  *
- * Monthly refresh (run by .github/workflows/monthly-pull.yml), capped at MARKETCHECK_BUDGET calls (default 400,
- * free tier is 500/month): re-searches the whole market, spends the rest on option sheets for cars that don't
- * have one yet, rebuilds listings.json and saves data/snapshots/<YYYY-MM>.json so price history accumulates.
- *
+ * Or run all three for this month (this is what the GitHub Action does on the 1st of every month):
  *   npx tsx scripts/pull-marketcheck.ts monthly
+ *
+ * The monthly run also saves data/snapshots/<YYYY-MM>.json so we keep a price history.
  */
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Listing } from "../src/data/types";
 
-const API = "https://api.marketcheck.com/v2";
-const CACHE = join(__dirname, "..", ".cache", "marketcheck");
-const LISTINGS = join(__dirname, "..", "src", "data", "listings.json");
-const SNAPSHOTS = join(__dirname, "..", "data", "snapshots");
-const KEY = process.env.MARKETCHECK_API_KEY;
-const BUDGET = Number(process.env.MARKETCHECK_BUDGET ?? 400);
-const MONTH = new Date().toISOString().slice(0, 7);
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const API_URL = "https://api.marketcheck.com/v2";
+const API_KEY = process.env.MARKETCHECK_API_KEY;
 
-/** Thrown when we've used up this run's call budget, so callers can stop cleanly. */
-class BudgetSpent extends Error {}
+const CACHE_FOLDER = join(__dirname, "..", ".cache", "marketcheck");
+const LISTINGS_FILE = join(__dirname, "..", "src", "data", "listings.json");
+const SNAPSHOTS_FOLDER = join(__dirname, "..", "data", "snapshots");
 
-let calls = 0;
-async function get(path: string, params: Record<string, string | number>, cacheFile: string) {
-  const file = join(CACHE, cacheFile);
-  if (existsSync(file)) return JSON.parse(readFileSync(file, "utf8"));
-  if (!KEY) throw new Error("MARKETCHECK_API_KEY missing");
-  if (calls >= BUDGET) throw new BudgetSpent(`call budget of ${BUDGET} spent`);
-  const qs = new URLSearchParams({ api_key: KEY, ...Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)])) });
-  const res = await fetch(`${API}/${path}?${qs}`);
-  calls++;
-  const body = await res.json();
-  if (!res.ok) throw new Error(`${res.status} ${JSON.stringify(body).slice(0, 200)}`);
-  // MarketCheck embeds the caller's key in cached photo URLs; never persist it.
-  writeFileSync(file, JSON.stringify(body).replaceAll(KEY, "REDACTED"));
-  await sleep(250);
-  return body;
-}
+// The free MarketCheck plan allows 500 calls a month. We stop at 400 to leave room for mistakes.
+const MAX_CALLS_PER_RUN = Number(process.env.MARKETCHECK_BUDGET ?? 400);
 
-/** `searchDir` is "search" for the original one-time pull and "<YYYY-MM>/search" for monthly pulls. */
-async function search(searchDir = "search") {
-  mkdirSync(join(CACHE, searchDir), { recursive: true });
-  for (let year = 2012; year <= new Date().getFullYear() + 1; year++) {
-    let start = 0;
-    let found = Infinity;
-    while (start < Math.min(found, 500)) {
-      const page = await get(
-        "search/car/active",
-        { make: "porsche", model: "911", year, car_type: "used", rows: 50, start },
-        `${searchDir}/${year}-${start}.json`,
-      );
-      found = page.num_found ?? 0;
-      start += 50;
-    }
-    console.log(`${year}: ${found} found`);
-  }
-  console.log(`search done, ${calls} new calls`);
-}
+// MarketCheck returns at most 50 cars per search call, and stops paging after 500 cars.
+const CARS_PER_PAGE = 50;
+const MAX_CARS_PER_YEAR = 500;
+const FIRST_MODEL_YEAR = 2012; // first year of the 991
 
+// For example "2026-11". Used to name this month's cache folder and snapshot file.
+const THIS_MONTH = new Date().toISOString().slice(0, 7);
+
+/** Thrown when we hit MAX_CALLS_PER_RUN, so we can stop cleanly instead of spending more. */
+class OutOfCallsError extends Error {}
+
+/** The fields we use from one car in a MarketCheck search result. */
 interface RawListing {
   id: string;
   vin: string;
@@ -77,85 +57,246 @@ interface RawListing {
   dom?: number;
   vdp_url?: string;
   heading?: string;
-  build?: { year?: number; trim?: string; version?: string; transmission?: string; body_type?: string };
+  build?: {
+    year?: number;
+    trim?: string;
+    version?: string;
+    transmission?: string;
+    body_type?: string;
+  };
 }
 
-function allSearchListings(searchDir = "search"): RawListing[] {
-  const dir = join(CACHE, searchDir);
-  const seen = new Map<string, RawListing>();
-  for (const f of readdirSync(dir)) {
-    for (const l of JSON.parse(readFileSync(join(dir, f), "utf8")).listings ?? []) seen.set(l.vin ?? l.id, l);
+// ---------------------------------------------------------------------------
+// Calling the API
+// ---------------------------------------------------------------------------
+
+let callsMadeThisRun = 0;
+
+function wait(milliseconds: number) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+/**
+ * Calls the MarketCheck API, or returns the saved copy if we already made this exact call.
+ * `cacheFileName` is where the response is saved inside CACHE_FOLDER.
+ */
+async function callApi(apiPath: string, searchParams: Record<string, string>, cacheFileName: string) {
+  const cacheFile = join(CACHE_FOLDER, cacheFileName);
+
+  // Already have it? Use the saved copy for free.
+  if (existsSync(cacheFile)) {
+    const savedText = readFileSync(cacheFile, "utf8");
+    return JSON.parse(savedText);
   }
-  return [...seen.values()];
+
+  if (!API_KEY) {
+    throw new Error("MARKETCHECK_API_KEY is missing");
+  }
+  if (callsMadeThisRun >= MAX_CALLS_PER_RUN) {
+    throw new OutOfCallsError(`Used all ${MAX_CALLS_PER_RUN} calls for this run`);
+  }
+
+  const query = new URLSearchParams({ api_key: API_KEY, ...searchParams });
+  const response = await fetch(`${API_URL}/${apiPath}?${query}`);
+  callsMadeThisRun = callsMadeThisRun + 1;
+
+  const data = await response.json();
+  if (!response.ok) {
+    const shortError = JSON.stringify(data).slice(0, 200);
+    throw new Error(`MarketCheck returned ${response.status}: ${shortError}`);
+  }
+
+  // MarketCheck puts our API key inside photo URLs. Remove it before saving to disk.
+  const textToSave = JSON.stringify(data).replaceAll(API_KEY, "REDACTED");
+  writeFileSync(cacheFile, textToSave);
+
+  // Pause a little between calls so we stay under MarketCheck's rate limit.
+  await wait(250);
+
+  return data;
 }
 
-function previousListings(): Map<string, Listing> {
-  if (!existsSync(LISTINGS)) return new Map();
-  return new Map((JSON.parse(readFileSync(LISTINGS, "utf8")) as Listing[]).map((l) => [l.id, l]));
+// ---------------------------------------------------------------------------
+// Step 1: search for every car for sale
+// ---------------------------------------------------------------------------
+
+/**
+ * Searches every model year, page by page, and saves each page.
+ * `searchFolder` is "search" for the original pull, or "2026-11/search" for a monthly pull.
+ */
+async function searchAllCars(searchFolder = "search") {
+  mkdirSync(join(CACHE_FOLDER, searchFolder), { recursive: true });
+
+  const lastModelYear = new Date().getFullYear() + 1; // next year's cars go on sale early
+
+  for (let year = FIRST_MODEL_YEAR; year <= lastModelYear; year++) {
+    let carsFound = 0;
+    let start = 0;
+
+    do {
+      const searchParams = {
+        make: "porsche",
+        model: "911",
+        year: String(year),
+        car_type: "used",
+        rows: String(CARS_PER_PAGE),
+        start: String(start),
+      };
+      const cacheFileName = `${searchFolder}/${year}-${start}.json`;
+
+      const page = await callApi("search/car/active", searchParams, cacheFileName);
+      carsFound = page.num_found ?? 0;
+      start = start + CARS_PER_PAGE;
+    } while (start < carsFound && start < MAX_CARS_PER_YEAR);
+
+    console.log(`${year}: ${carsFound} cars found`);
+  }
+
+  console.log(`Search done. ${callsMadeThisRun} new API calls.`);
 }
 
-async function extras(limit: number, searchDir = "search") {
-  mkdirSync(join(CACHE, "extra"), { recursive: true });
+/** Reads every saved search page and returns each car once (a car can show up on two pages). */
+function readSavedSearchResults(searchFolder = "search"): RawListing[] {
+  const folder = join(CACHE_FOLDER, searchFolder);
+  const carsByVin = new Map<string, RawListing>();
+
+  for (const fileName of readdirSync(folder)) {
+    const page = JSON.parse(readFileSync(join(folder, fileName), "utf8"));
+    const carsOnPage: RawListing[] = page.listings ?? [];
+
+    for (const car of carsOnPage) {
+      const uniqueId = car.vin ?? car.id;
+      carsByVin.set(uniqueId, car);
+    }
+  }
+
+  return Array.from(carsByVin.values());
+}
+
+/** Reads the current listings.json, keyed by car id (the VIN), so we can look up last month's data. */
+function readCurrentListings(): Map<string, Listing> {
+  const listingsById = new Map<string, Listing>();
+  if (!existsSync(LISTINGS_FILE)) {
+    return listingsById;
+  }
+
+  const listings: Listing[] = JSON.parse(readFileSync(LISTINGS_FILE, "utf8"));
+  for (const listing of listings) {
+    listingsById.set(listing.id, listing);
+  }
+  return listingsById;
+}
+
+// ---------------------------------------------------------------------------
+// Step 2: get option sheets
+// ---------------------------------------------------------------------------
+
+/**
+ * Gets the option sheet for up to `maxCars` cars that don't have one yet.
+ * Option sheets cost 1 call per car, so we spread them evenly across every generation + trim.
+ */
+async function getOptionSheets(maxCars: number, searchFolder = "search") {
+  mkdirSync(join(CACHE_FOLDER, "extra"), { recursive: true });
   const { mapListing } = await import("./marketcheck-map");
-  const prev = previousListings();
+  const currentListings = readCurrentListings();
 
-  // Group cars by generation + trim (e.g. "992.1|Carrera S").
-  // Skip cars we can't use, and cars whose option sheet we already have (build() reuses those).
-  const groups = new Map<string, RawListing[]>();
-  for (const raw of allSearchListings(searchDir)) {
-    const car = mapListing(raw);
-    if (!car) continue;
-    if (prev.get(car.id)?.optionsKnown) continue;
+  // Put cars into groups like "992.1|Carrera S".
+  const carsByGroup = new Map<string, RawListing[]>();
+  for (const rawCar of readSavedSearchResults(searchFolder)) {
+    const car = mapListing(rawCar);
+    if (!car) {
+      continue; // a car we don't track, like a 997 or a GT3
+    }
 
-    const key = `${car.generation}|${car.trim}`;
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key)!.push(raw);
+    const alreadyHaveOptions = currentListings.get(car.id)?.optionsKnown === true;
+    if (alreadyHaveOptions) {
+      continue;
+    }
+
+    const groupName = `${car.generation}|${car.trim}`;
+    if (!carsByGroup.has(groupName)) {
+      carsByGroup.set(groupName, []);
+    }
+    carsByGroup.get(groupName)!.push(rawCar);
   }
 
-  // Take one car from each group in turn, so every generation + trim gets option data.
-  const order: RawListing[] = [];
-  const queues = [...groups.values()];
-  while (order.length < limit && queues.some((q) => q.length)) {
-    for (const q of queues) if (q.length && order.length < limit) order.push(q.shift()!);
+  // Pick one car from each group, then one more from each group, and so on,
+  // so no generation or trim gets left out.
+  const carsToFetch: RawListing[] = [];
+  const groups = Array.from(carsByGroup.values());
+  let carsLeft = groups.some((group) => group.length > 0);
+
+  while (carsToFetch.length < maxCars && carsLeft) {
+    for (const group of groups) {
+      if (group.length > 0 && carsToFetch.length < maxCars) {
+        carsToFetch.push(group.shift()!);
+      }
+    }
+    carsLeft = groups.some((group) => group.length > 0);
   }
-  for (const l of order) {
+
+  for (const rawCar of carsToFetch) {
     try {
-      await get(`listing/car/${l.id}/extra`, {}, `extra/${l.id}.json`);
-    } catch (e) {
-      if (e instanceof BudgetSpent) break;
-      console.warn(`skip ${l.id}: ${(e as Error).message}`);
+      await callApi(`listing/car/${rawCar.id}/extra`, {}, `extra/${rawCar.id}.json`);
+    } catch (error) {
+      if (error instanceof OutOfCallsError) {
+        console.log("Out of API calls for this run. Stopping option sheets here.");
+        break;
+      }
+      // One bad car shouldn't stop the whole run.
+      console.warn(`Skipped car ${rawCar.id}: ${(error as Error).message}`);
     }
   }
-  console.log(`extras done, ${calls} new calls`);
+
+  console.log(`Option sheets done. ${callsMadeThisRun} new API calls.`);
 }
 
-async function build(searchDir = "search") {
-  const { mapListing, mapOptions } = await import("./marketcheck-map");
-  const prev = previousListings();
-  const out = [];
-  for (const raw of allSearchListings(searchDir)) {
-    const m = mapListing(raw);
-    if (!m) continue;
-    const extraFile = join(CACHE, "extra", `${raw.id}.json`);
-    const extra = existsSync(extraFile) ? JSON.parse(readFileSync(extraFile, "utf8")) : null;
-    const lastMonth = prev.get(m.id);
+// ---------------------------------------------------------------------------
+// Step 3: build listings.json and this month's snapshot
+// ---------------------------------------------------------------------------
 
-    if (extra) {
-      // We pulled this car's option sheet: decode it.
-      out.push({ ...m, options: mapOptions(extra, m.body), optionsKnown: true });
+async function buildListingsFile(searchFolder = "search") {
+  const { mapListing, mapOptions } = await import("./marketcheck-map");
+  const currentListings = readCurrentListings();
+  const newListings: Listing[] = [];
+
+  for (const rawCar of readSavedSearchResults(searchFolder)) {
+    const car = mapListing(rawCar);
+    if (!car) {
+      continue;
+    }
+
+    const optionSheetFile = join(CACHE_FOLDER, "extra", `${rawCar.id}.json`);
+    const lastMonth = currentListings.get(car.id);
+
+    if (existsSync(optionSheetFile)) {
+      // We have this car's option sheet: turn it into our option codes.
+      const optionSheet = JSON.parse(readFileSync(optionSheetFile, "utf8"));
+      newListings.push({ ...car, options: mapOptions(optionSheet, car.body), optionsKnown: true });
     } else if (lastMonth?.optionsKnown) {
-      // We pulled it in an earlier month: reuse those options instead of paying for them again.
-      out.push({ ...m, options: lastMonth.options, optionsKnown: true });
+      // We got this car's options in an earlier month: reuse them instead of paying again.
+      newListings.push({ ...car, options: lastMonth.options, optionsKnown: true });
     } else {
-      out.push({ ...m, options: [], optionsKnown: false });
+      // No option data for this car yet.
+      newListings.push({ ...car, options: [], optionsKnown: false });
     }
   }
-  writeFileSync(LISTINGS, JSON.stringify(out));
-  console.log(`wrote ${out.length} listings (${out.filter((l) => l.optionsKnown).length} with options)`);
 
-  // One small row per car per month, so later pulls can compare prices and spot cars that sold.
-  mkdirSync(SNAPSHOTS, { recursive: true });
-  const rows = out.map((car) => ({
+  writeFileSync(LISTINGS_FILE, JSON.stringify(newListings));
+  const carsWithOptions = newListings.filter((listing) => listing.optionsKnown).length;
+  console.log(`Wrote ${newListings.length} listings (${carsWithOptions} with options).`);
+
+  saveMonthlySnapshot(newListings);
+}
+
+/**
+ * Saves one small row per car for this month. Comparing two months shows
+ * which cars dropped in price and which ones disappeared (probably sold).
+ */
+function saveMonthlySnapshot(listings: Listing[]) {
+  mkdirSync(SNAPSHOTS_FOLDER, { recursive: true });
+
+  const snapshotRows = listings.map((car) => ({
     id: car.id,
     generation: car.generation,
     trim: car.trim,
@@ -164,22 +305,41 @@ async function build(searchDir = "search") {
     price: car.price,
     daysOnMarket: car.dom,
   }));
-  writeFileSync(join(SNAPSHOTS, `${MONTH}.json`), JSON.stringify(rows));
-  console.log(`wrote snapshot ${MONTH} (${rows.length} cars)`);
+
+  const snapshotFile = join(SNAPSHOTS_FOLDER, `${THIS_MONTH}.json`);
+  writeFileSync(snapshotFile, JSON.stringify(snapshotRows));
+  console.log(`Wrote snapshot ${THIS_MONTH} (${snapshotRows.length} cars).`);
 }
 
-/** Run all three steps for this month. Each month's search results get their own cache folder. */
-async function monthly() {
-  const dir = `${MONTH}/search`;
-  await search(dir);
-  await extras(BUDGET, dir);
-  await build(dir);
-  console.log(`monthly pull done: ${calls} of ${BUDGET} budgeted calls used`);
+// ---------------------------------------------------------------------------
+// Monthly run: all three steps, with this month's own search folder
+// ---------------------------------------------------------------------------
+
+async function runMonthlyPull() {
+  const searchFolder = `${THIS_MONTH}/search`;
+
+  await searchAllCars(searchFolder);
+  await getOptionSheets(MAX_CALLS_PER_RUN, searchFolder); // stops by itself when calls run out
+  await buildListingsFile(searchFolder);
+
+  console.log(`Monthly pull done. Used ${callsMadeThisRun} of ${MAX_CALLS_PER_RUN} allowed calls.`);
 }
 
-const [cmd, arg] = process.argv.slice(2);
-if (cmd === "search") search();
-else if (cmd === "extras") extras(Number(arg ?? 350));
-else if (cmd === "build") build();
-else if (cmd === "monthly") monthly();
-else console.log("usage: search | extras <n> | build | monthly");
+// ---------------------------------------------------------------------------
+// Command line
+// ---------------------------------------------------------------------------
+
+const command = process.argv[2];
+const commandArgument = process.argv[3];
+
+if (command === "search") {
+  searchAllCars();
+} else if (command === "extras") {
+  getOptionSheets(Number(commandArgument ?? 350));
+} else if (command === "build") {
+  buildListingsFile();
+} else if (command === "monthly") {
+  runMonthlyPull();
+} else {
+  console.log("Usage: search | extras <number of cars> | build | monthly");
+}
