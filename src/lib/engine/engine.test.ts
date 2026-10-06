@@ -9,6 +9,7 @@ import {
   optionPremium,
   paybackPct,
   premiumTable,
+  priceByYear,
   tierFor,
 } from "./index";
 
@@ -113,5 +114,17 @@ describe("modeled dataset (planted effects)", () => {
     expect(est.mid).toBeLessThan(est.high);
     expect(est.mid).toBeGreaterThan(70000);
     expect(est.mid).toBeLessThan(140000);
+  });
+});
+
+describe("price by model year", () => {
+  it("takes the median per year and skips thin years", () => {
+    const rows = [
+      car({ modelYear: 2021, price: 100000 }),
+      car({ modelYear: 2021, price: 110000 }),
+      car({ modelYear: 2021, price: 300000 }),
+      car({ modelYear: 2022, price: 120000 }),
+    ];
+    expect(priceByYear(rows, "Carrera S")).toEqual([{ year: 2021, medianPrice: 110000, sample: 3 }]);
   });
 });

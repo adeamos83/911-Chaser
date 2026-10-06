@@ -3,7 +3,6 @@ import type { BuildSpec, ColorTier, Generation, Listing, Trim } from "@/data/typ
 
 export const REF_MILEAGE = 15000;
 export const MIN_SAMPLE = 5;
-const NOW_YEAR = 2026;
 
 export type Confidence = "high" | "medium" | "low";
 export type ValueTier = "Value Holder" | "Neutral" | "Money Pit";
@@ -207,25 +206,7 @@ export function premiumTable(pool: Listing[]): PremiumTable {
   };
 }
 
-// ---------- 6. retention ----------
-
-export interface RetentionPoint {
-  age: number;
-  retention: number;
-  sample: number;
-}
-
-export function retentionCurve(listings: Listing[], key: { generation?: Generation; trim: Trim }): RetentionPoint[] {
-  const rows = listings.filter((l) => l.trim === key.trim && (!key.generation || l.generation === key.generation));
-  const byAge = new Map<number, number[]>();
-  for (const r of rows) {
-    const age = Math.max(0, NOW_YEAR - r.modelYear);
-    byAge.set(age, [...(byAge.get(age) ?? []), r.price / r.originalMsrp]);
-  }
-  return [...byAge.entries()]
-    .map(([age, xs]) => ({ age, retention: median(xs), sample: xs.length }))
-    .sort((a, b) => a.age - b.age);
-}
+// ---------- 6. price by model year ----------
 
 export interface YearPoint {
   year: number;

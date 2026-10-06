@@ -1,7 +1,7 @@
 /**
  * Generates a deterministic, *modeled* dataset of 911 sales and listings.
- * Not scraped. Option effects follow the resale hypothesis in IMPLEMENTATION_PLAN.md §5,
- * so the value engine has something real to find.
+ * Not scraped. Option effects follow common 911 resale wisdom (Sport Chrono and PTS hold value,
+ * PCCB and Burmester don't), so the engine's tests have known answers to recover.
  *
  * Run: npm run seed
  */
@@ -15,7 +15,7 @@ const NOW_YEAR = 2026;
 const TODAY = Date.UTC(2026, 9, 1);
 
 // Planted "true" payback per option: dollars recovered at resale / option MSRP.
-export const PLANTED_PAYBACK: Record<string, number> = {
+const PLANTED_PAYBACK: Record<string, number> = {
   PTS: 1.3,
   SPORT_CHRONO: 1.4,
   PSE: 1.1,

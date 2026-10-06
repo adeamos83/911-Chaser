@@ -23,11 +23,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang="en" className={`${serif.variable} ${body.variable}`}>
       <body className="min-h-screen">
         <header className="sticky top-0 z-20 border-b border-line/70 bg-bg/80 backdrop-blur">
-          <nav className="mx-auto flex max-w-7xl items-center gap-6 px-5 py-4 text-sm">
-            <Link href="/" className="font-display text-xl tracking-tight">
+          <nav className="mx-auto flex max-w-7xl items-center gap-4 px-5 py-4 text-sm">
+            <Link href="/" className="whitespace-nowrap font-display text-xl tracking-tight">
               Dream 911 <span className="italic text-accent">Chaser</span>
             </Link>
-            <div className="ml-auto flex items-center gap-5 text-muted">
+            <div className="ml-auto flex items-center gap-3 whitespace-nowrap text-muted sm:gap-5">
               <Link href="/build" className="hover:text-ink">Build</Link>
               <Link href="/deals" className="hover:text-ink">Deals</Link>
               <Link href="/garage" className="hover:text-ink">Garage</Link>

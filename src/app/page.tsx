@@ -20,7 +20,7 @@ export default function Home() {
             Build the 911 that <em className="text-accent">holds its value.</em>
           </h1>
           <p className="rise mt-6 max-w-xl text-lg text-muted" style={{ animationDelay: "160ms" }}>
-            Spec your car, see what it really trades for, which options pay you back, and which ones are money down the drain.
+            Spec your car, see what it&apos;s actually listed for at your mileage, which options pay you back, and where the deals are.
           </p>
           <div className="rise mt-8 flex flex-wrap gap-3" style={{ animationDelay: "240ms" }}>
             <Link href="/build" className="rounded-full bg-ink px-6 py-3 font-medium text-bg hover:bg-white">
