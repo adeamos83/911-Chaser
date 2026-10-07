@@ -5,7 +5,6 @@ I don't own a Porsche 911 yet. I want one. This app is for people like me who ar
 You pick the 911 you want, and the app tells you what it costs on the used market today, which options are worth paying for, and which real cars for sale are good deals.
 
 **Try it:** https://911-chaser.vercel.app
-**Demo login:** `demo@dream911chaser.com` / `FlatSix911!` (or click "Try the demo account" on the login card)
 
 ---
 

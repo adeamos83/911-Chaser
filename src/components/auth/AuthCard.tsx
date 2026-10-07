@@ -1,15 +1,12 @@
 "use client";
 
-import { startTransition, useActionState, useId, useState } from "react";
+import { useActionState, useId, useState } from "react";
 import { authenticate, type AuthState } from "@/app/login/actions";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
-import { OUTLINE_BUTTON, PRIMARY_BUTTON } from "@/components/ui/buttonStyles";
+import { PRIMARY_BUTTON } from "@/components/ui/buttonStyles";
 import { MIN_PASSWORD_LENGTH } from "@/lib/limits";
 
 export type AuthTab = "login" | "signup";
-
-// Shared demo login so visitors can try the garage without signing up.
-const DEMO_ACCOUNT = { email: "demo@dream911chaser.com", password: "FlatSix911!" };
 
 const TAB_OPTIONS: { value: AuthTab; label: string }[] = [
   { value: "login", label: "Log in" },
@@ -45,7 +42,7 @@ interface AuthCardProps {
   next?: string;
 }
 
-/** The "Log in | Create account" card: tabs, email and password fields, a demo shortcut, and a link to switch tabs. */
+/** The "Log in | Create account" card: tabs, email and password fields, and a link to switch tabs. */
 export function AuthCard({ tab, onTabChange, next }: AuthCardProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -54,19 +51,6 @@ export function AuthCard({ tab, onTabChange, next }: AuthCardProps) {
   const isSignup = tab === "signup";
   const otherTab: AuthTab = isSignup ? "login" : "signup";
   const fieldId = useId();
-
-  // Logs straight in, rather than just filling the form and leaving the visitor to press Log in.
-  const logInWithDemoAccount = () => {
-    onTabChange("login");
-    setEmail(DEMO_ACCOUNT.email);
-    setPassword(DEMO_ACCOUNT.password);
-    const formData = new FormData();
-    formData.set("mode", "login");
-    if (next) formData.set("next", next);
-    formData.set("email", DEMO_ACCOUNT.email);
-    formData.set("password", DEMO_ACCOUNT.password);
-    startTransition(() => formAction(formData));
-  };
 
   return (
     <div id="account" className="w-full rounded-auth border border-hairline bg-surface p-[26px] shadow-auth">
@@ -124,20 +108,6 @@ export function AuthCard({ tab, onTabChange, next }: AuthCardProps) {
           {pending ? "One moment…" : copy.submit}
         </button>
       </form>
-
-      <div className="mt-[18px] mb-3.5 flex items-center gap-3 text-micro text-muted">
-        <span className="h-px flex-1 bg-ink/10" />
-        or
-        <span className="h-px flex-1 bg-ink/10" />
-      </div>
-      <button
-        type="button"
-        onClick={logInWithDemoAccount}
-        disabled={pending}
-        className={`${OUTLINE_BUTTON} w-full cursor-pointer rounded-input p-3 text-small`}
-      >
-        Try the demo account
-      </button>
 
       <p className="mt-4 text-center text-caption text-muted">
         {copy.footerQuestion}{" "}
